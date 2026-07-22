@@ -30,6 +30,7 @@ def evaluate(asset_urn: str, metadata: dict[str, Any], policy: dict[str, Any] | 
         gaps.append("missing_owner")
     return {
         "asset_urn": asset_urn,
+        "obligation_id": policy["obligation_id"],
         "usage_class": usage,
         "controlling_policy_rule": rule["rule"],
         "proposed_disposition": rule["disposition"],

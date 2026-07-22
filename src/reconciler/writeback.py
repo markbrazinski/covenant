@@ -18,7 +18,7 @@ def desired_properties(decision: dict[str, Any], existing: dict[str, str]) -> di
     recorded_at = existing.get(PREFIX + "recorded_at") or datetime.now(timezone.utc).isoformat()
     return {
         PREFIX + "id": decision["decision_id"],
-        PREFIX + "obligation_id": "ATLAS-LIC-004",
+        PREFIX + "obligation_id": decision["obligation_id"],
         PREFIX + "disposition": decision["proposed_disposition"],
         PREFIX + "state": decision["decision_state"],
         PREFIX + "owner": decision["decision_owner"] or "",
