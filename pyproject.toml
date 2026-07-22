@@ -1,7 +1,7 @@
 [project]
 name = "covenant-native-semantic-graph"
-version = "0.2.0"
-description = "DataHub-backed native semantic graph proof for Covenant"
+version = "0.3.0"
+description = "Evidence-bound DataHub change-to-action proof for Covenant"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "acryl-datahub==1.6.0",

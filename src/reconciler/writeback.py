@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
@@ -63,7 +64,7 @@ def emit_decision_tags(urn: str, entity_type: str, disposition: str, state: str)
 
 def desired_properties(decision: dict[str, Any], existing: dict[str, str]) -> dict[str, str]:
     recorded_at = existing.get(PREFIX + "recorded_at") or datetime.now(timezone.utc).isoformat()
-    return {
+    properties = {
         PREFIX + "id": decision["decision_id"],
         PREFIX + "obligation_id": decision["obligation_id"],
         PREFIX + "disposition": decision["proposed_disposition"],
@@ -74,6 +75,25 @@ def desired_properties(decision: dict[str, Any], existing: dict[str, str]) -> di
         PREFIX + "recorded_at": recorded_at,
         PREFIX + "proposed_action": proposed_action(decision["proposed_disposition"]),
     }
+    context = decision.get("gate2_context")
+    if context:
+        properties.update(
+            {
+                PREFIX + "candidate_delta_id": context["candidate_delta_id"],
+                PREFIX + "activation_id": context["activation_id"],
+                PREFIX + "candidate_version": str(context["candidate_version"]),
+                PREFIX + "source_document_refs": json.dumps(
+                    context["source_document_refs"], separators=(",", ":")
+                ),
+                PREFIX + "source_document_hashes": json.dumps(
+                    context["source_document_hashes"],
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                PREFIX + "citations_sha256": context["citations_sha256"],
+            }
+        )
+    return properties
 
 
 def proposed_action(disposition: str) -> str:

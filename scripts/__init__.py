@@ -1,1 +1,1 @@
-"""Executable Gate 0 workflows."""
+"""Executable Covenant gate workflows."""

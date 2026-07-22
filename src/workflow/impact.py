@@ -76,9 +76,9 @@ def attach_paths(decision: dict[str, Any], path_result: dict[str, Any]) -> dict[
     return decision
 
 
-def analyse() -> dict[str, Any]:
+def analyse(policy: dict[str, Any] | None = None) -> dict[str, Any]:
     fixture = load_fixture()
-    policy = load_policy()
+    policy = policy or load_policy()
     source_urn = entity_urn("vendor_demographics_raw", fixture)
     control_urn = entity_urn("unrelated_control", fixture)
 
