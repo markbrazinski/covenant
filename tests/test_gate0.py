@@ -62,9 +62,9 @@ def test_04_unrelated_control_absent_and_unmutated(actual):
     control = dataset_urn("unrelated_control")
     assert control not in {item["asset_urn"] for item in actual["decisions"]}
     props = graph().get_aspect(control, DatasetPropertiesClass).customProperties
-    assert not any(key.startswith(PREFIX) for key in props)
+    assert not any(key.startswith("covenant.") for key in props)
     tags = graph().get_aspect(control, GlobalTagsClass).tags
-    assert not any("CovenantDisposition_" in item.tag for item in tags)
+    assert not any("urn:li:tag:Covenant" in item.tag for item in tags)
 
 
 def test_05_multi_path_deduplicates_decision_and_preserves_paths():

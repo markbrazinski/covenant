@@ -11,7 +11,6 @@ from datahub.metadata.schema_classes import (
 )
 
 from src.datahub_client.core import dataset_urn, emitter, entity_urn, graph, obligation_urn
-from src.reconciler.writeback import PREFIX
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = {
@@ -46,9 +45,9 @@ def verify() -> dict[str, object]:
         }.issubset({item["asset_urn"] for item in impact["decisions"]}),
         "writeback_readback": writeback["verified"] is True,
         "unaffected_unmutated": not any(
-            key.startswith(PREFIX) for key in control_props
+            key.startswith("covenant.") for key in control_props
         )
-        and not any("CovenantDisposition_" in item.tag for item in control_tags),
+        and not any("urn:li:tag:Covenant" in item.tag for item in control_tags),
         "synthetic_approval_labeled": writeback.get("synthetic_override", {}).get("label") == "SYNTHETIC TEST APPROVAL",
         "license_versions": term_v4 is not None and term_v3 is not None and term_v4.customProperties.get("covenant.obligation_version") == "4" and term_v3.customProperties.get("covenant.obligation_version") == "3",
     }

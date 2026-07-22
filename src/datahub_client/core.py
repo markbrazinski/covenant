@@ -212,9 +212,10 @@ def seed_fixture(
         return properties
 
     def emit_common(urn: str, entity_type: str, entity: dict[str, Any]) -> None:
-        tags = {tag_urn("CovenantSynthetic")}
+        is_control = entity["id"] == "unrelated_control"
+        tags = set() if is_control else {tag_urn("CovenantSynthetic")}
         current_tags = hub.get_aspect(urn, GlobalTagsClass)
-        if preserve_decisions and current_tags:
+        if preserve_decisions and current_tags and not is_control:
             tags.update(
                 association.tag
                 for association in current_tags.tags
@@ -305,7 +306,11 @@ def seed_fixture(
 
     for entity in dataset_entities:
         urn = dataset_urn(entity["id"], fixture)
-        props = merge_receipt(urn, DatasetPropertiesClass, base_properties(entity))
+        props = (
+            {}
+            if entity["id"] == "unrelated_control"
+            else merge_receipt(urn, DatasetPropertiesClass, base_properties(entity))
+        )
         aspects: Iterable[Any] = (
             DatasetPropertiesClass(
                 name=entity["name"],
