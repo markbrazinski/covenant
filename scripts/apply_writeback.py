@@ -24,7 +24,7 @@ if __name__ == "__main__":
         target = next(item for item in report["decisions"] if item["proposed_disposition"] == "human_review")
         result["synthetic_override"] = synthetic_override(
             target,
-            "Gate 0 software transition test only; no real governance decision or external action.",
+            "Gate 1A software transition test only; no real governance decision or external action.",
         )
         result["post_override_readback"] = readback(report["decisions"])
     (ROOT / "smoke-test" / "writeback_readback.json").write_text(

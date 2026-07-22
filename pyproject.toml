@@ -1,7 +1,7 @@
 [project]
-name = "covenant-gate0"
-version = "0.1.0"
-description = "DataHub-backed Gate 0 feasibility proof for Covenant"
+name = "covenant-native-semantic-graph"
+version = "0.2.0"
+description = "DataHub-backed native semantic graph proof for Covenant"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "acryl-datahub==1.6.0",

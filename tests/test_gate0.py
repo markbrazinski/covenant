@@ -5,9 +5,9 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from datahub.metadata.schema_classes import DatasetPropertiesClass
+from datahub.metadata.schema_classes import DatasetPropertiesClass, GlobalTagsClass
 
-from src.datahub_client.core import dataset_urn, graph
+from src.datahub_client.core import dataset_urn, entity_urn, graph
 from src.policy.engine import evaluate, load_policy, stable_decision_id
 from src.reconciler.writeback import PREFIX, apply, desired_properties, readback
 from src.workflow.impact import attach_paths, validate_active_version
@@ -29,6 +29,19 @@ def test_01_happy_path_exact_counts(actual):
         "unaffected": 1,
     }
     assert all(item["lineage_paths"] for item in actual["decisions"])
+    assert {item["entity_type"] for item in actual["decisions"]} == {
+        "dashboard",
+        "dataJob",
+        "dataset",
+        "mlModel",
+    }
+    assert sum(item["entity_type"] == "mlModel" for item in actual["decisions"]) == 2
+    assert {
+        entity_urn("executive_dashboard"),
+        entity_urn("churn_model_a"),
+        entity_urn("propensity_model_b"),
+        entity_urn("customer_delivery_job"),
+    }.issubset({item["asset_urn"] for item in actual["decisions"]})
 
 
 def test_02_rename_resistance():
@@ -50,6 +63,8 @@ def test_04_unrelated_control_absent_and_unmutated(actual):
     assert control not in {item["asset_urn"] for item in actual["decisions"]}
     props = graph().get_aspect(control, DatasetPropertiesClass).customProperties
     assert not any(key.startswith(PREFIX) for key in props)
+    tags = graph().get_aspect(control, GlobalTagsClass).tags
+    assert not any("CovenantDisposition_" in item.tag for item in tags)
 
 
 def test_05_multi_path_deduplicates_decision_and_preserves_paths():
@@ -108,6 +123,6 @@ def test_13_synthetic_human_override_is_distinguishable():
     evidence = json.loads((ROOT / "smoke-test" / "writeback_readback.json").read_text())
     override = evidence["synthetic_override"]
     assert override["label"] == "SYNTHETIC TEST APPROVAL"
-    assert override["actor"] == "synthetic_gate0_reviewer"
+    assert override["actor"] == "synthetic_gate1a_reviewer"
     assert override["prior_state"] != override["new_state"]
     assert "no real governance decision" in override["rationale"]

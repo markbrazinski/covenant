@@ -4,9 +4,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from datahub.metadata.schema_classes import DatasetPropertiesClass, GlossaryTermInfoClass
+from datahub.metadata.schema_classes import (
+    DatasetPropertiesClass,
+    GlobalTagsClass,
+    GlossaryTermInfoClass,
+)
 
-from src.datahub_client.core import dataset_urn, emitter, graph, obligation_urn
+from src.datahub_client.core import dataset_urn, emitter, entity_urn, graph, obligation_urn
 from src.reconciler.writeback import PREFIX
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,15 +28,27 @@ def verify() -> dict[str, object]:
     impact = json.loads((ROOT / "smoke-test" / "actual_impact_report.json").read_text())
     writeback = json.loads((ROOT / "smoke-test" / "writeback_readback.json").read_text())
     hub = graph()
-    control_props = hub.get_aspect(dataset_urn("unrelated_control"), DatasetPropertiesClass).customProperties
+    control_props = hub.get_aspect(
+        dataset_urn("unrelated_control"), DatasetPropertiesClass
+    ).customProperties
+    control_tags = hub.get_aspect(dataset_urn("unrelated_control"), GlobalTagsClass).tags
     term_v4 = hub.get_aspect(obligation_urn("ATLAS-LIC-004"), GlossaryTermInfoClass, version=0)
     term_v3 = hub.get_aspect(obligation_urn("ATLAS-LIC-004"), GlossaryTermInfoClass, version=1)
     checks = {
         "datahub_connection": True,
         "exact_counts": impact["counts"] == EXPECTED,
         "five_confirmed_paths": len(impact["decisions"]) == 5 and all(item["lineage_paths"] for item in impact["decisions"]),
+        "native_terminal_types": {
+            entity_urn("executive_dashboard"),
+            entity_urn("churn_model_a"),
+            entity_urn("propensity_model_b"),
+            entity_urn("customer_delivery_job"),
+        }.issubset({item["asset_urn"] for item in impact["decisions"]}),
         "writeback_readback": writeback["verified"] is True,
-        "unaffected_unmutated": not any(key.startswith(PREFIX) for key in control_props),
+        "unaffected_unmutated": not any(
+            key.startswith(PREFIX) for key in control_props
+        )
+        and not any("CovenantDisposition_" in item.tag for item in control_tags),
         "synthetic_approval_labeled": writeback.get("synthetic_override", {}).get("label") == "SYNTHETIC TEST APPROVAL",
         "license_versions": term_v4 is not None and term_v3 is not None and term_v4.customProperties.get("covenant.obligation_version") == "4" and term_v3.customProperties.get("covenant.obligation_version") == "3",
     }

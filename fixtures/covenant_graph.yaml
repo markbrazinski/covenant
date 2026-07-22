@@ -28,7 +28,8 @@ entities:
     owner: analytics
   - id: executive_dashboard
     name: Internal Executive Dashboard
-    kind: dashboard_equivalent
+    kind: dashboard
+    entity_type: dashboard
     terminal: true
     usage_class: internal_analytics
     owner: analytics
@@ -40,7 +41,8 @@ entities:
     owner: model_ops
   - id: churn_model_a
     name: Churn Model A
-    kind: model_equivalent
+    kind: ml_model
+    entity_type: mlModel
     terminal: true
     usage_class: ml_training
     owner: model_ops
@@ -52,7 +54,8 @@ entities:
     owner: model_ops
   - id: propensity_model_b
     name: Propensity Model B
-    kind: model_equivalent
+    kind: ml_model
+    entity_type: mlModel
     terminal: true
     usage_class: ml_training
     owner: model_ops
@@ -70,7 +73,8 @@ entities:
     owner: customer_product
   - id: customer_delivery_job
     name: Customer Delivery Job
-    kind: delivery_job_equivalent
+    kind: data_job
+    entity_type: dataJob
     terminal: true
     usage_class: customer_redistribution
     owner: customer_product
@@ -80,13 +84,42 @@ entities:
     terminal: true
     usage_class: internal_analytics
     owner: analytics
+  - id: customer_delivery_flow
+    name: Customer Delivery Flow
+    kind: data_flow
+    entity_type: dataFlow
+    terminal: false
+    usage_class: customer_redistribution
+    owner: customer_product
+  - id: train_churn_model_a
+    name: Train Churn Model A
+    kind: ml_training_process
+    entity_type: dataProcessInstance
+    terminal: false
+    usage_class: ml_training
+  - id: train_propensity_model_b
+    name: Train Propensity Model B
+    kind: ml_training_process
+    entity_type: dataProcessInstance
+    terminal: false
+    usage_class: ml_training
 edges:
   - [vendor_demographics_raw, executive_metrics]
-  - [executive_metrics, executive_dashboard]
   - [vendor_demographics_raw, training_features_a]
-  - [training_features_a, churn_model_a]
   - [vendor_demographics_raw, training_features_b]
-  - [training_features_b, propensity_model_b]
   - [vendor_demographics_raw, anonymized_segment_derivative]
   - [vendor_demographics_raw, customer_export]
-  - [customer_export, customer_delivery_job]
+native_lineage:
+  dashboard_inputs:
+    executive_dashboard: executive_metrics
+  model_training:
+    churn_model_a:
+      process: train_churn_model_a
+      input: training_features_a
+    propensity_model_b:
+      process: train_propensity_model_b
+      input: training_features_b
+  delivery:
+    flow: customer_delivery_flow
+    job: customer_delivery_job
+    input: customer_export

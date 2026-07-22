@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from src.datahub_client.core import dataset_urn, load_fixture
+from src.datahub_client.core import (
+    entity_urn,
+    load_fixture,
+    native_custom_properties,
+    native_name,
+    property_contract,
+)
 from src.datahub_client.mcp import call_mcp
 from src.policy.engine import evaluate, load_policy
 
@@ -22,6 +29,16 @@ def custom_properties(entity: dict[str, Any]) -> dict[str, str]:
 def owner(entity: dict[str, Any]) -> str | None:
     owners = entity.get("ownership", {}).get("owners", [])
     return owners[0].get("owner", {}).get("urn") if owners else None
+
+
+def entity_name(entity: dict[str, Any]) -> str:
+    properties = entity.get("properties", {})
+    return (
+        entity.get("name")
+        or properties.get("name")
+        or properties.get("title")
+        or entity["urn"]
+    )
 
 
 def paths_as_urns(path_result: dict[str, Any]) -> list[list[str]]:
@@ -49,14 +66,14 @@ def attach_paths(decision: dict[str, Any], path_result: dict[str, Any]) -> dict[
 def analyse() -> dict[str, Any]:
     fixture = load_fixture()
     policy = load_policy()
-    source_urn = dataset_urn("vendor_demographics_raw", fixture)
-    control_urn = dataset_urn("unrelated_control", fixture)
+    source_urn = entity_urn("vendor_demographics_raw", fixture)
+    control_urn = entity_urn("unrelated_control", fixture)
 
     search, source_detail, lineage = call_mcp(
         [
             ("search", {"query": "vendor_demographics_raw", "num_results": 10}),
             ("get_entities", {"urns": source_urn}),
-            ("get_lineage", {"urn": source_urn, "upstream": False, "max_hops": 5, "max_results": 30}),
+            ("get_lineage", {"urn": source_urn, "upstream": False, "max_hops": 6, "max_results": 50}),
         ]
     )
     matches = search.get("searchResults", [])
@@ -70,16 +87,56 @@ def analyse() -> dict[str, Any]:
     source_version = int(source_props.get("covenant.active_obligation_version", "0"))
     validate_active_version(policy["active_version"], source_version)
 
+    # GMS writes are synchronous, while the lineage search index converges
+    # asynchronously. Require two identical live-MCP snapshots before routing.
+    stable_reads = 0
+    previous_signature: tuple[str, ...] | None = None
+    for _ in range(6):
+        downstream = lineage.get("downstreams", {})
+        signature = tuple(
+            sorted(
+                item.get("entity", {}).get("urn", "")
+                for item in downstream.get("searchResults", [])
+            )
+        )
+        if signature == previous_signature:
+            stable_reads += 1
+        else:
+            stable_reads = 0
+            previous_signature = signature
+        if stable_reads >= 1:
+            break
+        time.sleep(1)
+        lineage = call_mcp(
+            [
+                (
+                    "get_lineage",
+                    {
+                        "urn": source_urn,
+                        "upstream": False,
+                        "max_hops": 6,
+                        "max_results": 50,
+                    },
+                )
+            ]
+        )[0]
+    else:
+        raise RuntimeError("DataHub MCP downstream lineage did not converge")
+
     downstream = lineage.get("downstreams", {})
     downstream_results = downstream.get("searchResults", [])
     downstream_urns = {item["entity"]["urn"] for item in downstream_results}
     if control_urn in downstream_urns:
         raise RuntimeError("unrelated control was discovered in the affected graph")
 
+    # MCP 0.6.0 intentionally returns different compact projections per native
+    # entity type. The affected set is exclusively MCP lineage-derived; native
+    # SDK aspect reads supply usage markers omitted from Dashboard and MLModel
+    # projections.
     terminal_urns = sorted(
-        item["entity"]["urn"]
-        for item in downstream_results
-        if custom_properties(item["entity"]).get("covenant.terminal") == "true"
+        urn
+        for urn in downstream_urns
+        if native_custom_properties(urn).get("covenant.terminal") == "true"
     )
     detail, control_detail = call_mcp(
         [
@@ -101,14 +158,20 @@ def analyse() -> dict[str, Any]:
     decisions: list[dict[str, Any]] = []
     for urn, path_result in zip(terminal_urns, path_results, strict=True):
         entity = entities[urn]
-        props = custom_properties(entity)
+        props = native_custom_properties(urn)
         metadata = {
             "usage_class": props.get("covenant.usage_class") or None,
             "owner": owner(entity),
         }
         decision = evaluate(urn, metadata, policy)
         decision.update(
-            asset_name=entity.get("name"),
+            asset_name=native_name(urn),
+            entity_type=property_contract(urn)[1],
+            metadata_interfaces={
+                "usage_and_terminal": "DataHub SDK native property-aspect read",
+                "ownership": "DataHub MCP get_entities",
+                "lineage": "DataHub MCP get_lineage_paths_between",
+            },
             evidence_reference="smoke-test/actual_impact_report.json",
         )
         decisions.append(attach_paths(decision, path_result))
@@ -127,14 +190,14 @@ def analyse() -> dict[str, Any]:
         "graph": {
             "downstream_entity_count": downstream.get("total"),
             "terminal_count": len(terminal_urns),
-            "read_interface": "mcp-server-datahub 0.6.0",
+            "read_interface": "mcp-server-datahub 0.6.0 live MCP",
         },
         "counts": dict(sorted(counts.items())),
         "decisions": decisions,
         "unaffected": [
             {
                 "asset_urn": control_urn,
-                "asset_name": control.get("name"),
+                "asset_name": entity_name(control),
                 "reason": "absent from DataHub MCP downstream lineage result",
             }
         ],
@@ -150,11 +213,11 @@ def write_results(report: dict[str, Any]) -> None:
         f"{item['decision_owner'] or 'OWNERSHIP GAP'} | {len(item['lineage_paths'])} |"
         for item in report["decisions"]
     )
-    text = f"""# Gate 0 Impact Results
+    text = f"""# Covenant Native Semantic Graph Results
 
 **SYNTHETIC DEMONSTRATION DATA ONLY**
 
-The governed source was resolved with DataHub MCP search and validated against the controlling obligation metadata. DataHub MCP returned {report['graph']['downstream_entity_count']} downstream entities across multiple hops; terminal status, usage, and ownership came from returned DataHub metadata.
+The governed source was resolved with live DataHub MCP search and validated against the controlling obligation metadata. DataHub MCP returned {report['graph']['downstream_entity_count']} downstream entities across native entity types and multiple hops. Lineage and ownership came from live MCP responses; terminal and usage fields came from live native property-aspect reads because MCP 0.6.0 omits those custom fields for Dashboard and MLModel projections.
 
 | Terminal | Usage class | Proposed disposition | Decision state | Owner | Confirmed paths |
 |---|---|---|---|---|---:|

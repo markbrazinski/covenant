@@ -5,13 +5,60 @@ from datetime import datetime, timezone
 from typing import Any
 
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
-from datahub.metadata.schema_classes import DatasetPropertiesClass
+from datahub.metadata.schema_classes import (
+    GlobalTagsClass,
+    TagAssociationClass,
+)
 
-from src.datahub_client.core import emitter, graph
+from src.datahub_client.core import (
+    emitter,
+    graph,
+    native_custom_properties,
+    property_contract,
+    tag_urn,
+)
 from src.datahub_client.mcp import call_mcp
 
 
 PREFIX = "covenant.decision."
+DISPOSITION_TAG_PREFIX = "urn:li:tag:CovenantDisposition_"
+STATE_TAG_PREFIX = "urn:li:tag:CovenantDecisionState_"
+
+
+def decision_tags(disposition: str, state: str) -> set[str]:
+    return {
+        tag_urn(f"CovenantDisposition_{disposition}"),
+        tag_urn(f"CovenantDecisionState_{state}"),
+    }
+
+
+def entity_tag_urns(entity: dict[str, Any]) -> set[str]:
+    found: set[str] = set()
+    for association in entity.get("tags", {}).get("tags", []):
+        tag = association.get("tag", {})
+        urn = tag.get("urn") if isinstance(tag, dict) else tag
+        if urn:
+            found.add(urn)
+    return found
+
+
+def emit_decision_tags(urn: str, entity_type: str, disposition: str, state: str) -> None:
+    current = graph().get_aspect(urn, GlobalTagsClass)
+    retained = {
+        association.tag
+        for association in (current.tags if current else [])
+        if not association.tag.startswith((DISPOSITION_TAG_PREFIX, STATE_TAG_PREFIX))
+    }
+    retained.update(decision_tags(disposition, state))
+    emitter().emit(
+        MetadataChangeProposalWrapper(
+            entityType=entity_type,
+            entityUrn=urn,
+            aspect=GlobalTagsClass(
+                tags=[TagAssociationClass(tag=value) for value in sorted(retained)]
+            ),
+        )
+    )
 
 
 def desired_properties(decision: dict[str, Any], existing: dict[str, str]) -> dict[str, str]:
@@ -47,7 +94,8 @@ def apply(decisions: list[dict[str, Any]], *, read_only: bool = False, fail_afte
     for index, decision in enumerate(decisions):
         if fail_after is not None and index >= fail_after:
             raise RuntimeError("injected partial-write interruption")
-        current = hub.get_aspect(decision["asset_urn"], DatasetPropertiesClass)
+        aspect_type, entity_type = property_contract(decision["asset_urn"])
+        current = hub.get_aspect(decision["asset_urn"], aspect_type)
         if current is None:
             raise RuntimeError(f"cannot write decision to missing DataHub entity: {decision['asset_urn']}")
         updated = deepcopy(current)
@@ -55,8 +103,14 @@ def apply(decisions: list[dict[str, Any]], *, read_only: bool = False, fail_afte
         updated.customProperties.update(desired_properties(decision, updated.customProperties))
         out.emit(
             MetadataChangeProposalWrapper(
-                entityType="dataset", entityUrn=decision["asset_urn"], aspect=updated
+                entityType=entity_type, entityUrn=decision["asset_urn"], aspect=updated
             )
+        )
+        emit_decision_tags(
+            decision["asset_urn"],
+            entity_type,
+            decision["proposed_disposition"],
+            decision["decision_state"],
         )
         written += 1
     return {"mode": "write", "proposed": len(decisions), "written": written, "verified": False}
@@ -65,7 +119,8 @@ def apply(decisions: list[dict[str, Any]], *, read_only: bool = False, fail_afte
 def synthetic_override(decision: dict[str, Any], rationale: str) -> dict[str, str]:
     urn = decision["asset_urn"]
     hub = graph()
-    current = hub.get_aspect(urn, DatasetPropertiesClass)
+    aspect_type, entity_type = property_contract(urn)
+    current = hub.get_aspect(urn, aspect_type)
     if current is None:
         raise RuntimeError(f"cannot transition missing DataHub entity: {urn}")
     updated = deepcopy(current)
@@ -76,26 +131,68 @@ def synthetic_override(decision: dict[str, Any], rationale: str) -> dict[str, st
             PREFIX + "state": "synthetic_test_approved",
             PREFIX + "prior_state": prior,
             PREFIX + "approval_label": "SYNTHETIC TEST APPROVAL",
-            PREFIX + "approval_actor": "synthetic_gate0_reviewer",
+            PREFIX + "approval_actor": "synthetic_gate1a_reviewer",
             PREFIX + "approval_rationale": rationale,
         }
     )
-    emitter().emit(MetadataChangeProposalWrapper(entityType="dataset", entityUrn=urn, aspect=updated))
-    return {"asset_urn": urn, "prior_state": prior, "new_state": "synthetic_test_approved", "label": "SYNTHETIC TEST APPROVAL", "actor": "synthetic_gate0_reviewer", "rationale": rationale}
+    emitter().emit(
+        MetadataChangeProposalWrapper(
+            entityType=entity_type, entityUrn=urn, aspect=updated
+        )
+    )
+    emit_decision_tags(
+        urn,
+        entity_type,
+        decision["proposed_disposition"],
+        "synthetic_test_approved",
+    )
+    return {
+        "asset_urn": urn,
+        "prior_state": prior,
+        "new_state": "synthetic_test_approved",
+        "label": "SYNTHETIC TEST APPROVAL",
+        "actor": "synthetic_gate1a_reviewer",
+        "rationale": rationale,
+    }
 
 
 def readback(decisions: list[dict[str, Any]]) -> dict[str, Any]:
     raw = call_mcp([("get_entities", {"urns": [item["asset_urn"] for item in decisions]})])[0]
     entities = raw["result"]
-    states: list[dict[str, str]] = []
+    states: list[dict[str, Any]] = []
+    expected = {item["asset_urn"]: item for item in decisions}
     for entity in entities:
-        props = {
-            item["key"]: item.get("value", "")
-            for item in entity.get("properties", {}).get("customProperties", [])
-        }
-        states.append({"asset_urn": entity["urn"], **{key: value for key, value in props.items() if key.startswith(PREFIX)}})
-    expected = {item["asset_urn"]: item["decision_id"] for item in decisions}
+        urn = entity["urn"]
+        decision = expected[urn]
+        tags = entity_tag_urns(entity)
+        props = native_custom_properties(urn)
+        expected_tags = decision_tags(
+            decision["proposed_disposition"], props.get(PREFIX + "state", "")
+        )
+        states.append(
+            {
+                "asset_urn": urn,
+                "entity_type": property_contract(urn)[1],
+                "mcp_tags_verified": expected_tags.issubset(tags),
+                "sdk_receipt_verified": props.get(PREFIX + "id")
+                == decision["decision_id"],
+                **{
+                    key: value
+                    for key, value in props.items()
+                    if key.startswith(PREFIX)
+                },
+            }
+        )
     verified = len(states) == len(decisions) and all(
-        state.get(PREFIX + "id") == expected[state["asset_urn"]] for state in states
+        state["mcp_tags_verified"] and state["sdk_receipt_verified"]
+        for state in states
     )
-    return {"verified": verified, "count": len(states), "states": states, "read_interface": "DataHub MCP get_entities"}
+    return {
+        "verified": verified,
+        "count": len(states),
+        "states": states,
+        "read_interfaces": {
+            "native_state": "DataHub MCP get_entities tags",
+            "detailed_receipt": "DataHub SDK native property-aspect read",
+        },
+    }
