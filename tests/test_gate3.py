@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import json
+import stat
+from pathlib import Path
+
+import anyio
+import httpx
+import pytest
+
+from src.api.app import create_app
+from src.api.service import CovenantService
+from src.api.store import RunStore
+from src.obligations.candidate import SYNTHETIC_APPROVAL_LABEL
+from src.reconciler.writeback import apply
+from src.workflow.impact import ImpactUnavailableError
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ASGIClient:
+    def __init__(self, service: CovenantService | None = None) -> None:
+        self.app = create_app(state_path=None, service=service)
+
+    def request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        async def send() -> httpx.Response:
+            transport = httpx.ASGITransport(app=self.app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://covenant.test"
+            ) as client:
+                return await client.request(method, path, **kwargs)
+
+        return anyio.run(send)
+
+    def get(self, path: str, **kwargs) -> httpx.Response:
+        return self.request("GET", path, **kwargs)
+
+    def post(self, path: str, **kwargs) -> httpx.Response:
+        return self.request("POST", path, **kwargs)
+
+
+def client_for(service: CovenantService | None = None) -> ASGIClient:
+    return ASGIClient(service)
+
+
+def activation_payload(change: dict) -> dict:
+    return {
+        "reviewed_candidate_hash": change["candidate_hash"],
+        "label": SYNTHETIC_APPROVAL_LABEL,
+        "actor": "synthetic_gate3_reviewer",
+        "review_note": "Gate 3 HTTP software test only; no real approval.",
+    }
+
+
+def test_gate3_candidate_only_http_path_and_schema_have_no_expected_outputs():
+    client = client_for()
+    response = client.get("/api/changes")
+    assert response.status_code == 200
+    changes = response.json()
+    assert len(changes) == 1
+    assert changes[0]["lifecycle_state"] == "AWAITING_REVIEW"
+    assert changes[0]["material_rule_count"] == 4
+    assert len(changes[0]["candidate_hash"]) == 64
+    schema_text = json.dumps(client.get("/openapi.json").json())
+    assert "expected_outputs" not in schema_text
+    assert "expected_terminals" not in schema_text
+    assert "expected_dispositions" not in schema_text
+
+
+def test_gate3_impact_is_blocked_before_activation():
+    client = client_for()
+    change = client.get("/api/changes").json()[0]
+    response = client.post(f"/api/changes/{change['change_id']}/impact")
+    assert response.status_code == 409
+    assert response.json()["code"] == "ACTIVATION_REQUIRED"
+
+
+def test_gate3_activation_requires_current_hash_and_literal_synthetic_label():
+    client = client_for()
+    change = client.get("/api/changes").json()[0]
+    wrong_hash = activation_payload(change)
+    wrong_hash["reviewed_candidate_hash"] = "0" * 64
+    response = client.post(
+        f"/api/changes/{change['change_id']}/activate", json=wrong_hash
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "CANDIDATE_HASH_MISMATCH"
+
+    wrong_label = activation_payload(change)
+    wrong_label["label"] = "approved"
+    response = client.post(
+        f"/api/changes/{change['change_id']}/activate", json=wrong_label
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "ACTIVATION_REFUSED"
+
+
+def test_gate3_invalid_uploaded_change_cannot_activate():
+    old_text = (ROOT / "fixtures" / "atlas_license_v3.md").read_text()
+    new_text = (ROOT / "fixtures" / "atlas_license_v4.md").read_text().replace(
+        "Effective August 1, 2026 for the fictional `vendor_demographics_raw` source:\n\n",
+        "",
+    )
+    client = client_for()
+    result = client.post(
+        "/api/changes/analyze", json={"old_text": old_text, "new_text": new_text}
+    )
+    assert result.status_code == 200
+    change = result.json()
+    assert change["lifecycle_state"] == "REJECTED"
+    response = client.post(
+        f"/api/changes/{change['change_id']}/activate",
+        json=activation_payload(change),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "ACTIVATION_REFUSED"
+
+
+def test_gate3_mcp_outage_projects_unavailable_without_affected_set():
+    def outage(policy):
+        raise ImpactUnavailableError(
+            "live DataHub MCP unavailable; Covenant did not produce an affected set"
+        )
+
+    service = CovenantService(RunStore(), impact_fn=outage)
+    client = client_for(service)
+    change = client.get("/api/changes").json()[0]
+    activation = client.post(
+        f"/api/changes/{change['change_id']}/activate",
+        json=activation_payload(change),
+    ).json()
+    stale = service.store.get_run(activation["run_id"])
+    stale["impact"] = {"counts": {"allowed": 99}, "decisions": []}
+    stale["receipts"] = [{"asset_urn": "urn:stale", "recorded_at": "stale"}]
+    service.store.put_run(activation["run_id"], stale)
+    response = client.post(f"/api/changes/{change['change_id']}/impact")
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "IMPACT_UNAVAILABLE",
+        "message": "live DataHub MCP unavailable; Covenant did not produce an affected set",
+        "affected_set_produced": False,
+        "retryable": True,
+    }
+    events = client.get(f"/api/runs/{activation['run_id']}/events").json()
+    assert events["error"]["affected_set_produced"] is False
+    run = client.get(f"/api/runs/{activation['run_id']}").json()
+    assert run["counts"] is None
+    assert run["decisions"] == []
+    assert run["receipts"] == []
+
+
+def test_gate3_file_store_is_ignored_shape_and_owner_only(tmp_path):
+    path = tmp_path / "state" / "gate3.json"
+    store = RunStore(path)
+    service = CovenantService(store)
+    service.ensure_canonical_change()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    reloaded = RunStore(path).snapshot()
+    assert reloaded["schema_version"] == "covenant.api_state.v1"
+    assert len(reloaded["changes"]) == 1
+
+
+@pytest.fixture(scope="module")
+def live_http_result():
+    client = client_for()
+    health = client.get("/api/health")
+    assert health.status_code == 200
+    assert health.json()["datahub"] == "connected"
+    change = client.get("/api/changes").json()[0]
+    activation = client.post(
+        f"/api/changes/{change['change_id']}/activate",
+        json=activation_payload(change),
+    )
+    assert activation.status_code == 200
+    run_id = activation.json()["run_id"]
+    impact = client.post(f"/api/changes/{change['change_id']}/impact")
+    assert impact.status_code == 200
+    assert impact.json()["receipts"] == []
+    written = client.post(f"/api/runs/{run_id}/writeback")
+    assert written.status_code == 200
+    replay = client.post(f"/api/runs/{run_id}/replay")
+    assert replay.status_code == 200
+    return impact.json(), written.json(), replay.json()
+
+
+def test_gate3_canonical_http_flow_uses_live_mcp_and_sdk(live_http_result):
+    impact, written, _ = live_http_result
+    assert impact["counts"] == {
+        "allowed": 1,
+        "human_review": 1,
+        "remediate": 2,
+        "stop_proposed": 1,
+        "unaffected": 1,
+    }
+    assert impact["stage"] == "IMPACT_READY"
+    assert len(impact["decisions"]) == 5
+    assert all(item["mcp_path_verified"] for item in impact["decisions"])
+    assert written["stage"] == "VERIFIED"
+    assert written["reconciliation_verified"] is True
+    assert len(written["receipts"]) == 5
+    assert all(item["written"] for item in written["receipts"])
+    assert all(not item["duplicate_tags"] for item in written["receipts"])
+
+
+def test_gate3_http_replay_preserves_ids_and_timestamps(live_http_result):
+    _, written, replay = live_http_result
+    before = {item["decision_id"]: item for item in written["receipts"]}
+    after = {item["decision_id"]: item for item in replay["receipts"]}
+    assert before.keys() == after.keys()
+    assert all(before[key]["recorded_at"] == after[key]["recorded_at"] for key in before)
+    assert all(item["stable_recorded_at"] for item in replay["receipts"])
+    assert all(not item["duplicate_tags"] for item in replay["receipts"])
+
+
+def test_gate3_partial_write_is_visible_and_retry_converges():
+    calls = 0
+
+    def interrupt_once(decisions):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return apply(decisions, fail_after=2)
+        return apply(decisions)
+
+    service = CovenantService(RunStore(), apply_fn=interrupt_once)
+    client = client_for(service)
+    change = client.get("/api/changes").json()[0]
+    run = client.post(
+        f"/api/changes/{change['change_id']}/activate",
+        json=activation_payload(change),
+    ).json()
+    assert client.post(f"/api/changes/{change['change_id']}/impact").status_code == 200
+    interrupted = client.post(f"/api/runs/{run['run_id']}/writeback")
+    assert interrupted.status_code == 503
+    assert interrupted.json()["code"] == "PARTIAL_WRITE"
+    state = client.get(f"/api/runs/{run['run_id']}").json()
+    assert state["stage"] == "PARTIAL_WRITE"
+    assert state["reconciliation_verified"] is False
+    recovered = client.post(f"/api/runs/{run['run_id']}/writeback")
+    assert recovered.status_code == 200
+    assert recovered.json()["stage"] == "VERIFIED"
+    assert recovered.json()["reconciliation_verified"] is True
+    assert len(recovered.json()["receipts"]) == 5

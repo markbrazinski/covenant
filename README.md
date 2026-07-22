@@ -37,6 +37,26 @@ real legal or governance approval. Covenant turns a reviewed source-data
 obligation change into a graph-derived operational response plan; it does not
 determine legal compliance or perform enforcement.
 
+Gate 3 exposes the same reviewed change-to-action loop through a local FastAPI
+boundary. Start the pinned DataHub runtime and API without resetting an existing
+graph:
+
+```bash
+cp .env.example .env
+./scripts/start_covenant.sh
+```
+
+The API documentation is available at `http://127.0.0.1:8000/docs`. In another
+terminal, run the canonical activation, impact, writeback, and replay proof:
+
+```bash
+./scripts/run_verified_demo.sh
+```
+
+The API persists local orchestration state only under ignored `smoke-test/`.
+DataHub remains authoritative for graph membership and native decision receipts.
+Gate 3 does not include a frontend.
+
 This is deliberately a local replay path, not a hosted-access claim. Internal
 commissions, reports, and generated evidence remain local and ignored. No
 public service, UI, or external action integration is included.

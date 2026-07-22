@@ -14,6 +14,12 @@ activation must be a separate event, and automated activation must use the
 literal **SYNTHETIC TEST APPROVAL** label. Active candidate rules may supply
 policy semantics, but live MCP remains the only affected-set and path source.
 
+Gate 3's API is an orchestration boundary over those verified semantics. It must
+keep candidate analysis, activation, MCP impact, and native writeback as distinct
+states; project unavailable and partial outcomes truthfully; persist only ignored
+local run state; and never accept expected terminal lists or dispositions from a
+client. Do not begin the frontend or model-proposal gates without later approval.
+
 Humans retain legal and governance authority. System recommendations and real human approvals are separate states. A fixture actor may exercise approval behavior only when every representation says **SYNTHETIC TEST APPROVAL**; never imply that a synthetic approval is real.
 
 ## Scope and safety
