@@ -29,8 +29,9 @@ async def call_tools(calls: list[tuple[str, dict[str, Any]]]) -> list[Any]:
         DATAHUB_GMS_URL=gms_url(),
         DATAHUB_GMS_TOKEN=os.getenv("DATAHUB_TOKEN", ""),
     )
+    venv_dir = os.getenv("COVENANT_VENV", ".venv")
     params = StdioServerParameters(
-        command=str(os.path.join(os.getcwd(), ".venv", "bin", "mcp-server-datahub")),
+        command=str(os.path.join(os.getcwd(), venv_dir, "bin", "mcp-server-datahub")),
         args=[],
         env=env,
         cwd=os.getcwd(),

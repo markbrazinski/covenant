@@ -10,6 +10,7 @@ from datahub.metadata.schema_classes import DatasetPropertiesClass, GlobalTagsCl
 from src.datahub_client.core import dataset_urn, entity_urn, graph
 from src.policy.engine import evaluate, load_policy, stable_decision_id
 from src.reconciler.writeback import PREFIX, apply, desired_properties, readback
+from src.workflow import impact
 from src.workflow.impact import attach_paths, validate_active_version
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,3 +127,45 @@ def test_13_synthetic_human_override_is_distinguishable():
     assert override["actor"] == "synthetic_gate1a_reviewer"
     assert override["prior_state"] != override["new_state"]
     assert "no real governance decision" in override["rationale"]
+
+
+def test_14_wrong_source_identity_fails_closed(monkeypatch):
+    original_entity_urn = impact.entity_urn
+
+    def wrong_source(entity_id, fixture=None):
+        if entity_id == "vendor_demographics_raw":
+            return "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.wrong,DEV)"
+        return original_entity_urn(entity_id, fixture)
+
+    monkeypatch.setattr(impact, "entity_urn", wrong_source)
+    monkeypatch.setattr(
+        impact,
+        "call_mcp",
+        lambda calls: [
+            {
+                "searchResults": [
+                    {
+                        "entity": {
+                            "urn": "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)"
+                        }
+                    }
+                ]
+            },
+            {"result": {}},
+            {"downstreams": {"searchResults": [], "total": 0}},
+        ],
+    )
+    with pytest.raises(RuntimeError, match="one exact validated match"):
+        impact.analyse()
+
+
+def test_15_mcp_outage_is_disclosed_and_has_no_fixture_fallback(monkeypatch):
+    def unavailable(calls):
+        raise ConnectionError("injected MCP outage")
+
+    monkeypatch.setattr(impact, "call_mcp", unavailable)
+    with pytest.raises(
+        impact.ImpactUnavailableError,
+        match="live DataHub MCP unavailable; Covenant did not produce an affected set",
+    ):
+        impact.analyse()

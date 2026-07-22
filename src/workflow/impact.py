@@ -19,6 +19,19 @@ from src.policy.engine import evaluate, load_policy
 ROOT = Path(__file__).resolve().parents[2]
 
 
+class ImpactUnavailableError(RuntimeError):
+    """The live metadata dependency is unavailable; no impact set was produced."""
+
+
+def live_mcp(calls: list[tuple[str, dict[str, Any]]]) -> list[Any]:
+    try:
+        return call_mcp(calls)
+    except Exception as exc:
+        raise ImpactUnavailableError(
+            "live DataHub MCP unavailable; Covenant did not produce an affected set"
+        ) from exc
+
+
 def custom_properties(entity: dict[str, Any]) -> dict[str, str]:
     return {
         item["key"]: item.get("value", "")
@@ -69,7 +82,7 @@ def analyse() -> dict[str, Any]:
     source_urn = entity_urn("vendor_demographics_raw", fixture)
     control_urn = entity_urn("unrelated_control", fixture)
 
-    search, source_detail, lineage = call_mcp(
+    search, source_detail, lineage = live_mcp(
         [
             ("search", {"query": "vendor_demographics_raw", "num_results": 10}),
             ("get_entities", {"urns": source_urn}),
@@ -107,7 +120,7 @@ def analyse() -> dict[str, Any]:
         if stable_reads >= 1:
             break
         time.sleep(1)
-        lineage = call_mcp(
+        lineage = live_mcp(
             [
                 (
                     "get_lineage",
@@ -138,14 +151,14 @@ def analyse() -> dict[str, Any]:
         for urn in downstream_urns
         if native_custom_properties(urn).get("covenant.terminal") == "true"
     )
-    detail, control_detail = call_mcp(
+    detail, control_detail = live_mcp(
         [
             ("get_entities", {"urns": terminal_urns}),
             ("get_entities", {"urns": control_urn}),
         ]
     )
     entities = {entity["urn"]: entity for entity in detail["result"]}
-    path_results = call_mcp(
+    path_results = live_mcp(
         [
             (
                 "get_lineage_paths_between",

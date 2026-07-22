@@ -1,10 +1,12 @@
 # Covenant Repository Instructions
 
-## Gate 1A contract
+## Verified runtime contract
 
 Covenant tests this thesis: when a source-data obligation changes, DataHub determines which downstream uses remain allowed, must stop, require remediation, or require a human decision, and Covenant records the response without touching unaffected assets.
 
-The canonical result is exactly **1 allowed / 2 remediate / 1 stop proposed / 1 human review / 1 unaffected**. Gate 1A uses native DataHub Dashboard, MLModel, DataFlow, and DataJob entities. DataHub MCP lineage must derive the affected set and defensible paths; no hidden graph or terminal outcome keyed by an asset name, URN, branch, or list position is acceptable. Prefer deterministic policy logic.
+The canonical result is exactly **1 allowed / 2 remediate / 1 stop proposed / 1 human review / 1 unaffected**. Covenant uses native DataHub Dashboard, MLModel, DataFlow, and DataJob entities. DataHub MCP lineage must derive the affected set and defensible paths; no hidden graph or terminal outcome keyed by an asset name, URN, branch, or list position is acceptable. Prefer deterministic policy logic.
+
+The supported runtime is the official local DataHub Quickstart pinned to v1.6.0. It is a reproducible local judge path, not a hosted-access or production-readiness claim. Bootstrap and replay must use the committed scripts and remain idempotent.
 
 Humans retain legal and governance authority. System recommendations and real human approvals are separate states. A fixture actor may exercise approval behavior only when every representation says **SYNTHETIC TEST APPROVAL**; never imply that a synthetic approval is real.
 
