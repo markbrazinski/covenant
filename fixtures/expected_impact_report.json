@@ -1,0 +1,11 @@
+{
+  "counts": {
+    "allowed": 1,
+    "remediate": 2,
+    "stop_proposed": 1,
+    "human_review": 1,
+    "unaffected": 1
+  },
+  "affected_terminals": 5,
+  "unaffected_controls": 1
+}

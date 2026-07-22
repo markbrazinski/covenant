@@ -1,0 +1,33 @@
+{
+  "obligation_id": "ATLAS-LIC-004",
+  "supersedes_version": 3,
+  "active_version": 4,
+  "effective_at": "2026-08-01T00:00:00Z",
+  "rules": {
+    "internal_analytics": {
+      "disposition": "allowed",
+      "decision_state": "recommendation_recorded",
+      "rule": "v4.internal_analytics.allowed"
+    },
+    "ml_training": {
+      "disposition": "remediate",
+      "decision_state": "awaiting_human_approval",
+      "rule": "v4.ml_training.prohibited_rebuild_or_deprecate"
+    },
+    "customer_redistribution": {
+      "disposition": "stop_proposed",
+      "decision_state": "awaiting_human_approval",
+      "rule": "v4.customer_redistribution.prohibited"
+    },
+    "anonymized_derivative": {
+      "disposition": "human_review",
+      "decision_state": "awaiting_human_review",
+      "rule": "v4.preexisting_anonymized_derivative.review"
+    }
+  },
+  "default": {
+    "disposition": "human_review",
+    "decision_state": "awaiting_evidence",
+    "rule": "v4.missing_or_unknown_usage.review"
+  }
+}

@@ -1,0 +1,92 @@
+organization: Northstar Commerce
+platform: covenant
+environment: DEV
+domain:
+  id: northstar_data_rights
+  name: Northstar Data Rights
+obligation:
+  id: ATLAS-LIC-004
+  active_version: 4
+  effective_at: "2026-08-01T00:00:00Z"
+owners:
+  governance: Northstar Governance
+  analytics: Northstar Analytics
+  model_ops: Northstar Model Operations
+  customer_product: Northstar Customer Data Product
+entities:
+  - id: vendor_demographics_raw
+    name: vendor_demographics_raw
+    kind: governed_source
+    terminal: false
+    usage_class: source
+    owner: governance
+  - id: executive_metrics
+    name: Executive Metrics Dataset
+    kind: analytics_dataset
+    terminal: false
+    usage_class: internal_analytics
+    owner: analytics
+  - id: executive_dashboard
+    name: Internal Executive Dashboard
+    kind: dashboard_equivalent
+    terminal: true
+    usage_class: internal_analytics
+    owner: analytics
+  - id: training_features_a
+    name: Training Features A
+    kind: feature_dataset
+    terminal: false
+    usage_class: ml_training
+    owner: model_ops
+  - id: churn_model_a
+    name: Churn Model A
+    kind: model_equivalent
+    terminal: true
+    usage_class: ml_training
+    owner: model_ops
+  - id: training_features_b
+    name: Training Features B
+    kind: feature_dataset
+    terminal: false
+    usage_class: ml_training
+    owner: model_ops
+  - id: propensity_model_b
+    name: Propensity Model B
+    kind: model_equivalent
+    terminal: true
+    usage_class: ml_training
+    owner: model_ops
+  - id: anonymized_segment_derivative
+    name: Anonymized Segment Derivative
+    kind: anonymized_derivative
+    terminal: true
+    usage_class: anonymized_derivative
+    owner: governance
+  - id: customer_export
+    name: Customer Redistribution Export
+    kind: export_dataset
+    terminal: false
+    usage_class: customer_redistribution
+    owner: customer_product
+  - id: customer_delivery_job
+    name: Customer Delivery Job
+    kind: delivery_job_equivalent
+    terminal: true
+    usage_class: customer_redistribution
+    owner: customer_product
+  - id: unrelated_control
+    name: Unrelated Control Asset
+    kind: control_dataset
+    terminal: true
+    usage_class: internal_analytics
+    owner: analytics
+edges:
+  - [vendor_demographics_raw, executive_metrics]
+  - [executive_metrics, executive_dashboard]
+  - [vendor_demographics_raw, training_features_a]
+  - [training_features_a, churn_model_a]
+  - [vendor_demographics_raw, training_features_b]
+  - [training_features_b, propensity_model_b]
+  - [vendor_demographics_raw, anonymized_segment_derivative]
+  - [vendor_demographics_raw, customer_export]
+  - [customer_export, customer_delivery_job]
