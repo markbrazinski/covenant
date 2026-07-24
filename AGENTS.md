@@ -18,17 +18,69 @@ Gate 3's API is an orchestration boundary over those verified semantics. It must
 keep candidate analysis, activation, MCP impact, and native writeback as distinct
 states; project unavailable and partial outcomes truthfully; persist only ignored
 local run state; and never accept expected terminal lists or dispositions from a
-client. Do not begin the frontend or model-proposal gates without later approval.
+client.
 
 Humans retain legal and governance authority. System recommendations and real human approvals are separate states. A fixture actor may exercise approval behavior only when every representation says **SYNTHETIC TEST APPROVAL**; never imply that a synthetic approval is real.
 
+## Current gate state
+
+- Gate 3 is complete at commit `d16ce34`; the last full verification recorded
+  39 tests with zero failures.
+- Gate 4 model-proposal evaluation is closed with `DEFER`. No approved model
+  credential or local model runtime exists, and no model-backed capability may
+  be claimed.
+- Gate 5, the web experience, is the next planned product gate but is not
+  authorized by this file. Begin it only after an explicit owner instruction.
+- Reopening Gate 4 requires explicit provider/model, credential source,
+  document-transmission permission, and cost/request or local-download approval.
+- When the local ignored documentation is present, read
+  `docs/Covenant_Handoff_2026-07-23.md` and the current gate report before
+  beginning a newly authorized gate.
+
+An explicit owner commission may authorize work otherwise excluded below, but
+only within that commission's named scope. A broad request to “continue” does
+not authorize publication, paid resources, real approval, external actions, or
+productionization.
+
+## Verified operator paths
+
+Use the committed scripts rather than inventing alternate setup paths:
+
+```bash
+cp .env.example .env
+./scripts/bootstrap_runtime.sh
+./scripts/run_verified_loop.sh
+```
+
+For the Gate 3 API without silently resetting an existing graph:
+
+```bash
+./scripts/start_covenant.sh
+./scripts/run_verified_demo.sh
+```
+
+`run_verified_loop.sh` is an intentional reset/reseed verification path.
+`start_covenant.sh` preserves an existing graph and seeds only when the canonical
+source is absent. Do not blur these behaviors.
+
 ## Scope and safety
 
-- Do not build a frontend, hosted service, Slack or Jira integration, broad contract parser, production integration, or machine-unlearning feature or claim.
+- Unless a current explicit commission authorizes it, do not build a frontend,
+  model integration, hosted service, Slack or Jira integration, broad contract
+  parser, production integration, or machine-unlearning feature or claim.
+- Even when a frontend is authorized, bind it to the real Gate 3 API; do not
+  hardcode expected terminals, paths, dispositions, receipts, or success states.
+- Treat existing tracked and untracked changes as user work. Preserve unrelated
+  files and never clean, reset, overwrite, or stage them merely to obtain a
+  clean status.
 - Never put secrets, raw environment identifiers, private endpoints, account data, raw exports, or credentials in tracked files.
 - Sanitize generated evidence before staging; visually inspect any evidence screenshot before copying it into `smoke-test/screenshots/`.
 - Record commands, exact versions, results, limitations, and deviations while work proceeds.
 - Do not create a remote or push without explicit owner approval.
 - Do not publish, create a remote, or begin a later gate without explicit owner approval.
 
-Gate commissions and reports remain local under ignored `docs/`; generated evidence remains under ignored `smoke-test/`. Any contradiction between implementation convenience and the current commission resolves in favor of truth, privacy, and the acceptance criteria.
+Gate commissions, reports, and handoffs remain local under ignored `docs/`;
+generated evidence and API run state remain under ignored `smoke-test/`. Tracked
+runtime code must not depend on either ignored directory. Any contradiction
+between implementation convenience and the current commission resolves in favor
+of truth, privacy, human authority, and the acceptance criteria.
