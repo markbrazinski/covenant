@@ -20,6 +20,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 node_modules/
+dist/
 .venv/
 venv/
 .DS_Store
@@ -36,3 +37,56 @@ smoke-test/screenshots/unreviewed/
 smoke-test/generated-state/
 docs/
 smoke-test/
+
+# Local agent/operator instructions and private execution commissions
+*_Commission.md
+*_commission.md
+commissions/
+.agents/
+.codex/
+.claude/
+.mcp.json
+
+# Local environment, shell tooling, and credential-shaped files
+.envrc
+.direnv/
+*.local
+*.credentials.json
+service-account*.json
+auth/
+
+# Private evidence, exports, recordings, and review artifacts
+artifacts/
+evidence/
+reports/
+recordings/
+screenshots/
+*.har
+*.trace
+*.pcap
+*.dump
+*.zip
+*.7z
+*.tar
+*.tgz
+*.gz
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mov
+*.mp4
+*.webm
+
+# Local state databases and transient tool output
+*.db
+*.sqlite
+*.sqlite3
+.history/
+*.swp
+*.swo
+*~
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
