@@ -50,7 +50,14 @@ class ActivationRequest(BaseModel):
     review_note: str = Field(min_length=1, max_length=500)
 
 
+class PathNode(BaseModel):
+    urn: str
+    display_name: str
+    native_type: str
+
+
 class ImpactTerminal(BaseModel):
+    path_id: str
     decision_id: str
     asset_urn: str
     display_name: str
@@ -61,9 +68,37 @@ class ImpactTerminal(BaseModel):
     decision_state: str
     proposed_action: str
     paths: list[list[str]]
+    path_nodes: list[list[PathNode]]
     triggering_rule: dict[str, Any]
+    controlling_policy_rule: str
+    confidence_meaning: str
+    actor_class: str
+    metadata_interfaces: dict[str, str]
     mcp_path_verified: bool
     readback_verified: bool = False
+    datahub_url: str | None = None
+
+
+class ResolvedSource(BaseModel):
+    urn: str
+    resolved_via: str
+    obligation_id: str
+    active_version: int
+
+
+class GraphProjection(BaseModel):
+    downstream_entity_count: int
+    terminal_count: int
+    read_interface: str
+
+
+class UnaffectedControl(BaseModel):
+    asset_urn: str
+    display_name: str
+    native_type: str
+    outside_affected_set_proof: str
+    unmutated_verified: bool
+    datahub_url: str | None = None
 
 
 class RunProgress(BaseModel):
@@ -83,7 +118,8 @@ class VerifiedReceipt(BaseModel):
     sdk_receipt_readback_verified: bool
     stable_recorded_at: bool
     duplicate_tags: bool
-    recorded_at: str
+    recorded_at: str | None
+    datahub_url: str | None = None
 
 
 class RunDetail(BaseModel):
@@ -92,10 +128,13 @@ class RunDetail(BaseModel):
     activation_id: str
     stage: str
     progress: RunProgress
+    source: ResolvedSource | None = None
+    graph: GraphProjection | None = None
     counts: dict[str, int] | None = None
     decisions: list[ImpactTerminal] = Field(default_factory=list)
     receipts: list[VerifiedReceipt] = Field(default_factory=list)
     reconciliation_verified: bool = False
+    unaffected_control: UnaffectedControl | None = None
 
 
 class ErrorProjection(BaseModel):

@@ -46,9 +46,13 @@ def reconcile(
     context = decision_context(candidate)
     expected = {item["asset_urn"]: item for item in decisions}
     checks: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for state in receipt_readback["states"]:
         urn = state["asset_urn"]
-        decision = expected[urn]
+        decision = expected.get(urn)
+        if decision is None or urn in seen:
+            continue
+        seen.add(urn)
         checks.append(
             {
                 "asset_urn": urn,
@@ -80,7 +84,9 @@ def reconcile(
     control_tags = graph().get_aspect(control_urn, GlobalTagsClass)
     control_isolated = not control_props and not (control_tags.tags if control_tags else [])
     verified = (
-        len(checks) == len(decisions) == 5
+        seen == set(expected)
+        and len(checks) == len(decisions) == 5
+        and receipt_readback.get("identity_set_verified", True)
         and all(all(value for key, value in check.items() if key != "asset_urn") for check in checks)
         and control_isolated
     )

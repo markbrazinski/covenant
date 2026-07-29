@@ -8,11 +8,11 @@ import anyio
 import httpx
 import pytest
 
-from src.api.app import create_app
-from src.api.service import CovenantService
+from src.api.app import configured_state_path, create_app
+from src.api.service import CovenantService, datahub_entity_url
 from src.api.store import RunStore
 from src.obligations.candidate import SYNTHETIC_APPROVAL_LABEL
-from src.reconciler.writeback import apply
+from src.reconciler.writeback import apply, readback
 from src.workflow.impact import ImpactUnavailableError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +65,113 @@ def test_gate3_candidate_only_http_path_and_schema_have_no_expected_outputs():
     assert "expected_outputs" not in schema_text
     assert "expected_terminals" not in schema_text
     assert "expected_dispositions" not in schema_text
+
+
+def test_gate3_cors_is_narrow_to_the_documented_development_origin():
+    response = client_for().request(
+        "OPTIONS",
+        "/api/changes",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    refused = client_for().request(
+        "OPTIONS",
+        "/api/changes",
+        headers={
+            "Origin": "https://untrusted.example",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert "access-control-allow-origin" not in refused.headers
+
+
+def test_gate3_rejects_wildcard_cors(monkeypatch):
+    monkeypatch.setenv("COVENANT_CORS_ORIGINS", "*")
+    with pytest.raises(RuntimeError, match="wildcard"):
+        create_app(state_path=None)
+
+
+def test_gate3_state_override_stays_in_ignored_generated_state():
+    safe = configured_state_path(
+        "smoke-test/generated-state/operator-selected-state.json"
+    )
+    assert safe == ROOT / "smoke-test/generated-state/operator-selected-state.json"
+    with pytest.raises(RuntimeError, match="smoke-test/generated-state"):
+        configured_state_path("src/operator-selected-state.json")
+    with pytest.raises(RuntimeError, match="smoke-test/generated-state"):
+        configured_state_path("/tmp/operator-selected-state.json")
+
+
+def test_gate3_datahub_links_require_safe_http_base(monkeypatch):
+    urn = "urn:li:dashboard:(covenant,northstar.executive_dashboard)"
+    monkeypatch.setenv("DATAHUB_UI_URL", "javascript://example.test")
+    assert datahub_entity_url(urn, "dashboard") is None
+    monkeypatch.setenv("DATAHUB_UI_URL", "https://user:pass@example.test")
+    assert datahub_entity_url(urn, "dashboard") is None
+    monkeypatch.setenv("DATAHUB_UI_URL", "https://datahub.example.test")
+    assert datahub_entity_url(urn, "dashboard") == (
+        "https://datahub.example.test/dashboard/"
+        "urn:li:dashboard:(covenant,northstar.executive_dashboard)/"
+    )
+    assert datahub_entity_url(
+        "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.churn_model_a,DEV)",
+        "mlModel",
+    ) == (
+        "https://datahub.example.test/mlModels/"
+        "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.churn_model_a,DEV)/"
+    )
+    assert datahub_entity_url(
+        "urn:li:dataJob:(urn:li:dataFlow:(covenant,northstar.flow,DEV),northstar.job)",
+        "dataJob",
+    ) == (
+        "https://datahub.example.test/tasks/"
+        "urn:li:dataJob:(urn:li:dataFlow:(covenant,northstar.flow,DEV),northstar.job)/"
+    )
+    assert datahub_entity_url("urn:li:dataFlow:test", "dataFlow") is None
+
+
+def test_gate3_readback_rejects_duplicate_identity_rows(monkeypatch):
+    import src.reconciler.writeback as writeback
+
+    decisions = [
+        {
+            "asset_urn": "urn:expected:one",
+            "decision_id": "decision-one",
+            "proposed_disposition": "allowed",
+        },
+        {
+            "asset_urn": "urn:expected:two",
+            "decision_id": "decision-two",
+            "proposed_disposition": "remediate",
+        },
+    ]
+    duplicate = {"urn": "urn:expected:one", "tags": {"tags": []}}
+    monkeypatch.setattr(
+        writeback,
+        "call_mcp",
+        lambda _: [{"result": [duplicate, duplicate]}],
+    )
+    monkeypatch.setattr(
+        writeback,
+        "property_contract",
+        lambda _: (object, "dataset"),
+    )
+    monkeypatch.setattr(
+        writeback,
+        "native_custom_properties",
+        lambda _: {
+            writeback.PREFIX + "id": "decision-one",
+            writeback.PREFIX + "state": "awaiting_human_approval",
+        },
+    )
+    result = writeback.readback(decisions)
+    assert result["identity_set_verified"] is False
+    assert result["verified"] is False
+    assert result["count"] == 1
 
 
 def test_gate3_impact_is_blocked_before_activation():
@@ -196,11 +303,26 @@ def test_gate3_canonical_http_flow_uses_live_mcp_and_sdk(live_http_result):
     assert impact["stage"] == "IMPACT_READY"
     assert len(impact["decisions"]) == 5
     assert all(item["mcp_path_verified"] for item in impact["decisions"])
+    assert impact["graph"] == {
+        "downstream_entity_count": 11,
+        "terminal_count": 5,
+        "read_interface": "mcp-server-datahub 0.6.0 live MCP",
+    }
+    assert [item["path_id"] for item in impact["decisions"]] == [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+    ]
+    assert all(item["path_nodes"] for item in impact["decisions"])
+    assert impact["unaffected_control"]["unmutated_verified"] is False
     assert written["stage"] == "VERIFIED"
     assert written["reconciliation_verified"] is True
     assert len(written["receipts"]) == 5
     assert all(item["written"] for item in written["receipts"])
     assert all(not item["duplicate_tags"] for item in written["receipts"])
+    assert written["unaffected_control"]["unmutated_verified"] is True
 
 
 def test_gate3_http_replay_preserves_ids_and_timestamps(live_http_result):
@@ -215,15 +337,32 @@ def test_gate3_http_replay_preserves_ids_and_timestamps(live_http_result):
 
 def test_gate3_partial_write_is_visible_and_retry_converges():
     calls = 0
+    call_sizes = []
+    readback_calls = 0
 
     def interrupt_once(decisions):
         nonlocal calls
         calls += 1
+        call_sizes.append(len(decisions))
         if calls == 1:
             return apply(decisions, fail_after=2)
         return apply(decisions)
 
-    service = CovenantService(RunStore(), apply_fn=interrupt_once)
+    def project_partial_once(decisions):
+        nonlocal readback_calls
+        readback_calls += 1
+        result = readback(decisions)
+        if readback_calls == 1:
+            for state in result["states"][2:]:
+                state["mcp_tags_verified"] = False
+                state["sdk_receipt_verified"] = False
+        return result
+
+    service = CovenantService(
+        RunStore(),
+        apply_fn=interrupt_once,
+        readback_fn=project_partial_once,
+    )
     client = client_for(service)
     change = client.get("/api/changes").json()[0]
     run = client.post(
@@ -237,8 +376,14 @@ def test_gate3_partial_write_is_visible_and_retry_converges():
     state = client.get(f"/api/runs/{run['run_id']}").json()
     assert state["stage"] == "PARTIAL_WRITE"
     assert state["reconciliation_verified"] is False
+    assert len(state["receipts"]) == 5
+    assert sum(item["sdk_receipt_readback_verified"] for item in state["receipts"]) == 2
     recovered = client.post(f"/api/runs/{run['run_id']}/writeback")
     assert recovered.status_code == 200
     assert recovered.json()["stage"] == "VERIFIED"
     assert recovered.json()["reconciliation_verified"] is True
     assert len(recovered.json()["receipts"]) == 5
+    assert call_sizes == [5, 3]
+    listed = client.get("/api/runs")
+    assert listed.status_code == 200
+    assert [item["run_id"] for item in listed.json()] == [run["run_id"]]

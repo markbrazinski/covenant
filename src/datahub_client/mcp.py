@@ -28,11 +28,23 @@ async def call_tools(calls: list[tuple[str, dict[str, Any]]]) -> list[Any]:
     env.update(
         DATAHUB_GMS_URL=gms_url(),
         DATAHUB_GMS_TOKEN=os.getenv("DATAHUB_TOKEN", ""),
+        DATAHUB_TELEMETRY_ENABLED="false",
+        # DataHub OSS v1.6.0 has no DOCUMENT entity. mcp-server-datahub 0.6.0
+        # otherwise probes that unsupported type while listing tools and can
+        # block the stdio session before Covenant reaches its lineage tools.
+        DATAHUB_MCP_DOCUMENT_TOOLS_DISABLED=os.getenv(
+            "DATAHUB_MCP_DOCUMENT_TOOLS_DISABLED", "true"
+        ),
+        # The personal/global View preference queries used by newer MCP
+        # servers are also outside the pinned v1.6.0 OSS surface.
+        DATAHUB_MCP_DISABLE_DEFAULT_VIEW=os.getenv(
+            "DATAHUB_MCP_DISABLE_DEFAULT_VIEW", "true"
+        ),
     )
     venv_dir = os.getenv("COVENANT_VENV", ".venv")
     params = StdioServerParameters(
         command=str(os.path.join(os.getcwd(), venv_dir, "bin", "mcp-server-datahub")),
-        args=[],
+        args=["--transport", "stdio"],
         env=env,
         cwd=os.getcwd(),
     )

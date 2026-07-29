@@ -21,5 +21,5 @@ api_port="${COVENANT_API_PORT:-8000}"
 "$venv_dir/bin/python" scripts/ensure_fixture.py
 
 echo "Covenant API: http://${api_host}:${api_port}/docs"
-echo "Gate 3 exposes the verified API only; no frontend is started."
+echo "React UI is started separately from frontend/ and binds to this API."
 exec "$venv_dir/bin/uvicorn" src.api.app:app --host "$api_host" --port "$api_port"

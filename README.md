@@ -55,8 +55,28 @@ terminal, run the canonical activation, impact, writeback, and replay proof:
 
 The API persists local orchestration state only under ignored `smoke-test/`.
 DataHub remains authoritative for graph membership and native decision receipts.
-Gate 3 does not include a frontend.
+
+The approved Gate 5 React integration lives in `frontend/` and uses the real API
+by default:
+
+```bash
+cd frontend
+cp .env.example .env
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173/changes`. When the API uses another port, set
+`VITE_COVENANT_API_URL` in `frontend/.env`. Development CORS is narrowly limited
+to the two loopback Vite origins through `COVENANT_CORS_ORIGINS`; production is
+intended to be same-origin. Fixture mode is explicit and never a runtime
+fallback.
+
+Ordinary `start_covenant.sh` invokes `scripts/ensure_fixture.py`: it reads the
+canonical governed source and seeds the representative native graph only when
+that source is absent. It preserves existing graph and decision state. The
+separate `run_verified_loop.sh` remains the intentional reset/reseed path.
 
 This is deliberately a local replay path, not a hosted-access claim. Internal
 commissions, reports, and generated evidence remain local and ignored. No
-public service, UI, or external action integration is included.
+public service or external action integration is included.

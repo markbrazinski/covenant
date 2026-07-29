@@ -181,8 +181,16 @@ def readback(decisions: list[dict[str, Any]]) -> dict[str, Any]:
     entities = raw["result"]
     states: list[dict[str, Any]] = []
     expected = {item["asset_urn"]: item for item in decisions}
+    seen: set[str] = set()
+    unexpected_urns: list[str] = []
     for entity in entities:
         urn = entity["urn"]
+        if urn not in expected:
+            unexpected_urns.append(urn)
+            continue
+        if urn in seen:
+            continue
+        seen.add(urn)
         decision = expected[urn]
         tags = entity_tag_urns(entity)
         props = native_custom_properties(urn)
@@ -203,7 +211,8 @@ def readback(decisions: list[dict[str, Any]]) -> dict[str, Any]:
                 },
             }
         )
-    verified = len(states) == len(decisions) and all(
+    expected_urns = set(expected)
+    verified = seen == expected_urns and not unexpected_urns and all(
         state["mcp_tags_verified"] and state["sdk_receipt_verified"]
         for state in states
     )
@@ -211,6 +220,8 @@ def readback(decisions: list[dict[str, Any]]) -> dict[str, Any]:
         "verified": verified,
         "count": len(states),
         "states": states,
+        "identity_set_verified": seen == expected_urns and not unexpected_urns,
+        "unexpected_urns": sorted(set(unexpected_urns)),
         "read_interfaces": {
             "native_state": "DataHub MCP get_entities tags",
             "detailed_receipt": "DataHub SDK native property-aspect read",

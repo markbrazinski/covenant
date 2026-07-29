@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.schemas import (
@@ -16,6 +18,18 @@ from src.api.schemas import (
 from src.api.service import APIStateError, CovenantService, DEFAULT_STATE_PATH
 from src.api.store import RunStore
 from src.datahub_client.core import emitter
+
+STATE_ROOT = (Path(__file__).resolve().parents[2] / "smoke-test" / "generated-state").resolve()
+
+
+def configured_state_path(value: str) -> Path:
+    candidate = Path(value)
+    resolved = (candidate if candidate.is_absolute() else STATE_ROOT.parents[1] / candidate).resolve()
+    if not resolved.is_relative_to(STATE_ROOT) or resolved == STATE_ROOT:
+        raise RuntimeError(
+            "COVENANT_STATE_PATH must resolve to a file under smoke-test/generated-state"
+        )
+    return resolved
 
 
 def create_app(
@@ -31,6 +45,24 @@ def create_app(
         description="Evidence-bound obligation change to DataHub operational response.",
     )
     app.state.covenant = service
+    allowed_origins = [
+        origin.strip()
+        for origin in os.getenv(
+            "COVENANT_CORS_ORIGINS",
+            "http://127.0.0.1:5173,http://localhost:5173",
+        ).split(",")
+        if origin.strip()
+    ]
+    if "*" in allowed_origins:
+        raise RuntimeError("COVENANT_CORS_ORIGINS must not contain a wildcard origin")
+    if allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type"],
+        )
 
     @app.exception_handler(APIStateError)
     async def state_error(_: Request, exc: APIStateError) -> JSONResponse:
@@ -96,6 +128,13 @@ def create_app(
     def run(run_id: str) -> dict[str, Any]:
         return service.run_detail(service._run(run_id))
 
+    @app.get("/api/runs", response_model=list[RunDetail])
+    def runs() -> list[dict[str, Any]]:
+        return [
+            service.run_detail(value)
+            for value in service.store.snapshot()["runs"].values()
+        ]
+
     @app.get("/api/runs/{run_id}/events")
     def events(run_id: str) -> dict[str, Any]:
         value = service._run(run_id)
@@ -121,4 +160,7 @@ def create_app(
     return app
 
 
-app = create_app()
+configured_state = os.getenv("COVENANT_STATE_PATH", "").strip()
+app = create_app(
+    state_path=configured_state_path(configured_state) if configured_state else DEFAULT_STATE_PATH
+)

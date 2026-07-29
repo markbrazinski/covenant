@@ -169,6 +169,17 @@ def analyse(policy: dict[str, Any] | None = None) -> dict[str, Any]:
     )
 
     decisions: list[dict[str, Any]] = []
+    path_node_cache: dict[str, dict[str, str]] = {}
+
+    def path_node(urn: str) -> dict[str, str]:
+        if urn not in path_node_cache:
+            path_node_cache[urn] = {
+                "urn": urn,
+                "display_name": native_name(urn),
+                "native_type": property_contract(urn)[1],
+            }
+        return path_node_cache[urn]
+
     for urn, path_result in zip(terminal_urns, path_results, strict=True):
         entity = entities[urn]
         props = native_custom_properties(urn)
@@ -187,7 +198,12 @@ def analyse(policy: dict[str, Any] | None = None) -> dict[str, Any]:
             },
             evidence_reference="smoke-test/actual_impact_report.json",
         )
-        decisions.append(attach_paths(decision, path_result))
+        decision = attach_paths(decision, path_result)
+        decision["lineage_path_nodes"] = [
+            [path_node(node_urn) for node_urn in path]
+            for path in decision["lineage_paths"]
+        ]
+        decisions.append(decision)
 
     counts = Counter(item["proposed_disposition"] for item in decisions)
     counts["unaffected"] = 1

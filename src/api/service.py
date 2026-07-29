@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import quote, urlsplit
 
 from datahub.metadata.schema_classes import GlobalTagsClass
 
@@ -18,7 +20,7 @@ from src.obligations.candidate import (
     submit_for_review,
     validate_candidate,
 )
-from src.reconciler.writeback import apply, proposed_action, readback
+from src.reconciler.writeback import PREFIX, apply, proposed_action, readback
 from src.workflow.change_to_action import decision_context, reconcile, rejected_candidate
 from src.workflow.impact import ImpactUnavailableError, analyse
 
@@ -26,6 +28,29 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STATE_PATH = ROOT / "smoke-test" / "generated-state" / "gate3-api-state.json"
 OLD_PATH = ROOT / "fixtures" / "atlas_license_v3.md"
 NEW_PATH = ROOT / "fixtures" / "atlas_license_v4.md"
+
+
+def datahub_entity_url(urn: str, entity_type: str) -> str | None:
+    base_url = os.getenv("DATAHUB_UI_URL", "").strip().rstrip("/")
+    if not base_url:
+        return None
+    parsed = urlsplit(base_url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return None
+    route = {
+        "dataset": "dataset",
+        "dashboard": "dashboard",
+        "mlModel": "mlModels",
+        "dataJob": "tasks",
+    }.get(entity_type)
+    if not route:
+        return None
+    return f"{base_url}/{route}/{quote(urn, safe=':,()')}/"
 
 
 class APIStateError(RuntimeError):
@@ -273,12 +298,36 @@ class CovenantService:
             )
         decisions = run["impact"]["decisions"]
         prior_recorded_at = run.get("prior_recorded_at", {})
-        self._event(run, "WRITING", "Writing five native DataHub decision receipts", 4, 5)
+        already_verified = {
+            item["asset_urn"]
+            for item in run.get("receipts", [])
+            if item.get("mcp_tag_readback_verified")
+            and item.get("sdk_receipt_readback_verified")
+        }
+        incomplete_decisions = [
+            decision
+            for decision in decisions
+            if decision["asset_urn"] not in already_verified
+        ]
+        self._event(
+            run,
+            "WRITING",
+            f"Recording {len(incomplete_decisions)} incomplete native DataHub proposal receipts; verified records are preserved",
+            4,
+            5,
+        )
         self.store.put_run(run_id, run)
         try:
-            write_result = self.apply_fn(decisions)
+            write_result = self.apply_fn(incomplete_decisions)
             receipt_readback = self.readback_fn(decisions)
         except Exception as exc:
+            try:
+                partial_readback = self.readback_fn(decisions)
+                run["receipts"] = self._receipts(
+                    decisions, partial_readback, prior_recorded_at
+                )
+            except Exception:
+                pass
             self._fail(
                 run,
                 "PARTIAL_WRITE",
@@ -295,27 +344,7 @@ class CovenantService:
             ) from exc
         change = self._change(run["change_id"])
         reconciliation = reconcile(change["candidate"], decisions, receipt_readback)
-        state_by_urn = {item["asset_urn"]: item for item in receipt_readback["states"]}
-        receipts = []
-        for decision in decisions:
-            urn = decision["asset_urn"]
-            state = state_by_urn[urn]
-            recorded_at = state.get("covenant.decision.recorded_at")
-            tags = graph().get_aspect(urn, GlobalTagsClass)
-            tag_values = [item.tag for item in (tags.tags if tags else [])]
-            receipts.append(
-                {
-                    "decision_id": decision["decision_id"],
-                    "asset_urn": urn,
-                    "written": True,
-                    "mcp_tag_readback_verified": state["mcp_tags_verified"],
-                    "sdk_receipt_readback_verified": state["sdk_receipt_verified"],
-                    "stable_recorded_at": prior_recorded_at.get(urn, recorded_at)
-                    == recorded_at,
-                    "duplicate_tags": len(tag_values) != len(set(tag_values)),
-                    "recorded_at": recorded_at,
-                }
-            )
+        receipts = self._receipts(decisions, receipt_readback, prior_recorded_at)
         run.update(
             writeback=write_result,
             receipt_readback=receipt_readback,
@@ -341,6 +370,45 @@ class CovenantService:
         self.store.put_run(run_id, run)
         return run
 
+    @staticmethod
+    def _receipts(
+        decisions: list[dict[str, Any]],
+        receipt_readback: dict[str, Any],
+        prior_recorded_at: dict[str, str | None],
+    ) -> list[dict[str, Any]]:
+        state_by_urn = {
+            item["asset_urn"]: item for item in receipt_readback.get("states", [])
+        }
+        receipts = []
+        for decision in decisions:
+            urn = decision["asset_urn"]
+            state = state_by_urn.get(urn, {})
+            recorded_at = state.get(PREFIX + "recorded_at")
+            tags = graph().get_aspect(urn, GlobalTagsClass)
+            tag_values = [item.tag for item in (tags.tags if tags else [])]
+            written = bool(state.get("sdk_receipt_verified"))
+            receipts.append(
+                {
+                    "decision_id": decision["decision_id"],
+                    "asset_urn": urn,
+                    "written": written,
+                    "mcp_tag_readback_verified": bool(
+                        state.get("mcp_tags_verified")
+                    ),
+                    "sdk_receipt_readback_verified": bool(
+                        state.get("sdk_receipt_verified")
+                    ),
+                    "stable_recorded_at": bool(recorded_at)
+                    and prior_recorded_at.get(urn, recorded_at) == recorded_at,
+                    "duplicate_tags": len(tag_values) != len(set(tag_values)),
+                    "recorded_at": recorded_at,
+                    "datahub_url": datahub_entity_url(
+                        urn, decision["entity_type"]
+                    ),
+                }
+            )
+        return receipts
+
     def replay(self, run_id: str) -> dict[str, Any]:
         self.run_impact(run_id)
         return self.writeback(run_id)
@@ -352,9 +420,23 @@ class CovenantService:
             rule["usage_class"]: rule for rule in change["candidate"].get("rules", [])
         }
         decisions = []
-        for decision in (impact or {}).get("decisions", []):
+        disposition_order = {
+            "allowed": 0,
+            "remediate": 1,
+            "stop_proposed": 2,
+            "human_review": 3,
+        }
+        projected_decisions = sorted(
+            (impact or {}).get("decisions", []),
+            key=lambda item: (
+                disposition_order[item["proposed_disposition"]],
+                item["lineage_paths"][0] if item["lineage_paths"] else [],
+            ),
+        )
+        for path_index, decision in enumerate(projected_decisions, start=1):
             decisions.append(
                 {
+                    "path_id": f"P{path_index}",
                     "decision_id": decision["decision_id"],
                     "asset_urn": decision["asset_urn"],
                     "display_name": decision["asset_name"],
@@ -365,14 +447,42 @@ class CovenantService:
                     "decision_state": decision["decision_state"].upper(),
                     "proposed_action": proposed_action(decision["proposed_disposition"]),
                     "paths": decision["lineage_paths"],
+                    "path_nodes": decision.get("lineage_path_nodes", []),
                     "triggering_rule": rules.get(decision["usage_class"], {}),
+                    "controlling_policy_rule": decision[
+                        "controlling_policy_rule"
+                    ],
+                    "confidence_meaning": decision["confidence_meaning"],
+                    "actor_class": decision["actor_class"],
+                    "metadata_interfaces": decision["metadata_interfaces"],
                     "mcp_path_verified": bool(decision["lineage_paths"]),
                     "readback_verified": bool(
                         (run.get("reconciliation") or {}).get("verified", False)
                     ),
+                    "datahub_url": datahub_entity_url(
+                        decision["asset_urn"], decision["entity_type"]
+                    ),
                 }
             )
         event = run["events"][-1]
+        unaffected = (impact or {}).get("unaffected", [])
+        unaffected_control = None
+        if unaffected:
+            control = unaffected[0]
+            unaffected_control = {
+                "asset_urn": control["asset_urn"],
+                "display_name": control["asset_name"],
+                "native_type": "dataset",
+                "outside_affected_set_proof": control["reason"],
+                "unmutated_verified": bool(
+                    (run.get("reconciliation") or {}).get(
+                        "unrelated_control_isolated", False
+                    )
+                ),
+                "datahub_url": datahub_entity_url(
+                    control["asset_urn"], "dataset"
+                ),
+            }
         return {
             "run_id": run["run_id"],
             "change_id": run["change_id"],
@@ -386,12 +496,15 @@ class CovenantService:
                 "total": event["total"],
                 "error": run.get("error"),
             },
+            "source": (impact or {}).get("source"),
+            "graph": (impact or {}).get("graph"),
             "counts": (impact or {}).get("counts"),
             "decisions": decisions,
             "receipts": run.get("receipts", []),
             "reconciliation_verified": bool(
                 (run.get("reconciliation") or {}).get("verified", False)
             ),
+            "unaffected_control": unaffected_control,
         }
 
     def _change(self, change_id: str) -> dict[str, Any]:
