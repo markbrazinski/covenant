@@ -38,6 +38,7 @@ import { PlansIndex, GovernanceBackBand, type RecordedPlan } from "./Plans";
 import { ImpactWorkspace, type LedgerMode } from "./ImpactWorkspace";
 import {
   EvidenceBundle,
+  DataHubLink,
   GovernanceHold,
   RecordingBanner,
   VerifiedReceipt
@@ -391,6 +392,14 @@ export function RecordApp() {
           rows={view.rows}
           tally={view.tally}
           showTally={hasLedger}
+          headerAction={
+            selTerm?.datahubUrl ? (
+              <DataHubLink
+                url={selTerm.datahubUrl}
+                label={`Open ${selTerm.displayName} in local DataHub ↗`}
+              />
+            ) : null
+          }
           unaffected={view.unaffected}
           controlNote="no change"
           banner={banner}
@@ -460,6 +469,14 @@ export function RecordApp() {
           rows={rows}
           tally={tally}
           showTally={true}
+          headerAction={
+            selectedTerm?.datahubUrl ? (
+              <DataHubLink
+                url={selectedTerm.datahubUrl}
+                label={`Open ${selectedTerm.displayName} in local DataHub ↗`}
+              />
+            ) : null
+          }
           unaffected={unaffected}
           controlNote="verified unmutated"
           banner={

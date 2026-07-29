@@ -43,6 +43,7 @@ export interface WorkspaceProps {
   unaffected: UnaffectedControlVM | null;
   controlNote: string;
   banner?: ReactNode;
+  headerAction?: ReactNode;
   evidencePanel?: ReactNode;
   footer?: ReactNode;
   onRetry: () => void;
@@ -135,9 +136,12 @@ export function ImpactWorkspace(p: WorkspaceProps) {
         {p.ledgerMode === "ledger" && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {p.banner}
-            <div className={animateReveal ? "impact-outcomes-reveal" : undefined} style={{ padding: "14px 22px 8px", display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "2px solid var(--ink)" }}>
+            <div className={animateReveal ? "impact-outcomes-reveal" : undefined} style={{ padding: "10px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid var(--ink)" }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>Impact Plan</span>
-              {p.showTally && <ImpactTally tally={p.tally} />}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {p.headerAction}
+                {p.showTally && <ImpactTally tally={p.tally} />}
+              </div>
             </div>
             <div className={animateReveal ? "impact-outcomes-reveal" : undefined} style={{ flex: 1, overflow: "auto", padding: "12px 22px" }}>
               <div style={{ display: "grid", gap: 6 }}>

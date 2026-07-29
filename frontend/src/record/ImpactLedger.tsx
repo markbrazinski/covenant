@@ -39,6 +39,42 @@ export function ImpactTally({ tally }: { tally: TallyCounts }) {
   );
 }
 
+export function DataHubLink({
+  url,
+  label = "Open in local DataHub ↗",
+  compact = false
+}: {
+  url: string;
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <a
+      className="mono"
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: compact ? "4px 7px" : "7px 10px",
+        border: "1px solid var(--sel)",
+        borderRadius: 2,
+        background: "var(--sel)",
+        color: "#fff",
+        fontSize: compact ? 9.5 : 10.5,
+        fontWeight: 700,
+        letterSpacing: ".03em",
+        lineHeight: 1.2,
+        textDecoration: "none",
+        whiteSpace: "nowrap"
+      }}
+    >
+      {label}
+    </a>
+  );
+}
+
 // ---- one ledger row --------------------------------------------------------
 export function ImpactPlanRow({
   row,
@@ -105,15 +141,13 @@ export function ImpactPlanRow({
             {row.datahubUrl && (
               <>
                 {" · "}
-                <a
-                  href={row.datahubUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Open ${row.displayName} properties in DataHub`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  Open in DataHub ↗
-                </a>
+                <span onClick={(event) => event.stopPropagation()}>
+                  <DataHubLink
+                    url={row.datahubUrl}
+                    label="Open in DataHub ↗"
+                    compact
+                  />
+                </span>
               </>
             )}
           </span>
@@ -197,16 +231,12 @@ export function EvidenceBundle({ ev }: { ev: EvidenceBundleVM }) {
         ))}
       </div>
       {ev.datahubUrl && (
-        <a
-          className="mono"
-          href={ev.datahubUrl}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Open ${ev.terminalName} properties in DataHub`}
-          style={{ display: "inline-block", marginTop: 9, fontSize: 11 }}
-        >
-          Open native Properties in DataHub ↗
-        </a>
+        <div style={{ marginTop: 10 }}>
+          <DataHubLink
+            url={ev.datahubUrl}
+            label="Open native properties in DataHub ↗"
+          />
+        </div>
       )}
     </div>
   );
