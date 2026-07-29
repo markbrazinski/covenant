@@ -49,12 +49,31 @@ export function ImpactPlanRow({
 }) {
   const meta = DISPOSITION[row.disposition];
   const color = dispColor(row.disposition);
+  const failed = row.writebackPhase === "FAILED";
+  const inFlight = Boolean(
+    row.writebackPhase &&
+      !["PENDING", "VERIFIED", "FAILED"].includes(row.writebackPhase)
+  );
+  const rowBackground = failed
+    ? "#fbf3f1"
+    : inFlight
+      ? "#fbf7ee"
+      : row.selected
+        ? "var(--sel-wash)"
+        : "var(--surface)";
+  const rowBorder = failed
+    ? "2px solid var(--stop)"
+    : inFlight
+      ? "2px solid var(--remediate)"
+      : row.selected
+        ? "2px solid var(--sel)"
+        : "1px solid var(--line)";
   return (
     <button
       type="button"
       onClick={() => onSelect(row.id)}
       aria-pressed={row.selected}
-      aria-label={`${row.displayName}, ${meta.label}${row.selected ? ", selected" : ""}`}
+      aria-label={`${row.displayName}, ${meta.label}, ${row.lifecycleMarker}${row.selected ? ", selected" : ""}`}
       style={{
         display: "flex",
         alignItems: "center",
@@ -64,8 +83,8 @@ export function ImpactPlanRow({
         width: "100%",
         textAlign: "left",
         cursor: "pointer",
-        background: row.selected ? "var(--sel-wash)" : "var(--surface)",
-        border: row.selected ? "2px solid var(--sel)" : "1px solid var(--line)",
+        background: rowBackground,
+        border: rowBorder,
         boxShadow: row.selected ? "inset 3px 0 0 var(--sel)" : "none"
       }}
     >
@@ -103,6 +122,20 @@ export function ImpactPlanRow({
       {row.verified && (
         <span aria-hidden="true" className="mono" style={{ fontSize: 12, fontWeight: 700, color: "var(--verify)" }}>
           ✓
+        </span>
+      )}
+      {(inFlight || failed) && (
+        <span
+          className={inFlight ? "rec-pulse mono" : "mono"}
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            color: failed ? "var(--stop)" : "var(--remediate)",
+            whiteSpace: "nowrap",
+            flex: "none"
+          }}
+        >
+          {failed ? "FAILED" : "IN FLIGHT"}
         </span>
       )}
       <span
@@ -200,7 +233,15 @@ export function GovernanceHold({
 }
 
 // ---- recording progress banner --------------------------------------------
-export function RecordingBanner({ rec, partial }: { rec: RecordingProgressDTO | null; partial: boolean }) {
+export function RecordingBanner({
+  rec,
+  partial,
+  targetCount
+}: {
+  rec: RecordingProgressDTO | null;
+  partial: boolean;
+  targetCount: number;
+}) {
   if (partial) {
     return (
       <div style={{ margin: "16px 22px 0", border: "1.5px solid var(--remediate)", background: "#fbf7ee", padding: "12px 15px" }}>
@@ -212,7 +253,7 @@ export function RecordingBanner({ rec, partial }: { rec: RecordingProgressDTO | 
     );
   }
   const v = rec?.readback_verified_count ?? 0;
-  const target = rec?.target_count ?? 0;
+  const target = rec?.target_count ?? targetCount;
   return (
     <div style={{ margin: "16px 22px 0", border: "1.5px solid var(--remediate)", background: "#fbf7ee", padding: "12px 15px" }}>
       <div className="rec-pulse" style={{ fontWeight: 700, fontSize: 12 }}>◐ Recording to DataHub · {v}/{target} readbacks verified</div>

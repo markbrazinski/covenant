@@ -325,9 +325,17 @@ export function RecordApp() {
     }
 
     const banner = recording ? (
-      <RecordingBanner rec={view.machine.recProgress ?? null} partial={false} />
+      <RecordingBanner
+        rec={view.machine.recProgress ?? null}
+        partial={false}
+        targetCount={view.terminals.length}
+      />
     ) : partial ? (
-      <RecordingBanner rec={view.machine.recProgress ?? null} partial={true} />
+      <RecordingBanner
+        rec={view.machine.recProgress ?? null}
+        partial={true}
+        targetCount={view.terminals.length}
+      />
     ) : null;
 
     const footer =

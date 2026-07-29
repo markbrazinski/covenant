@@ -14,6 +14,7 @@ from src.api.schemas import (
     ChangeSummary,
     ErrorProjection,
     RunDetail,
+    WritebackProgress,
 )
 from src.api.service import APIStateError, CovenantService, DEFAULT_STATE_PATH
 from src.api.store import RunStore
@@ -139,6 +140,13 @@ def create_app(
     def events(run_id: str) -> dict[str, Any]:
         value = service._run(run_id)
         return {"run_id": run_id, "events": value["events"], "error": value.get("error")}
+
+    @app.get(
+        "/api/runs/{run_id}/writeback-progress",
+        response_model=WritebackProgress,
+    )
+    def writeback_progress(run_id: str) -> dict[str, Any]:
+        return service.writeback_progress(run_id)
 
     @app.post("/api/runs/{run_id}/writeback", response_model=RunDetail)
     def writeback(run_id: str) -> dict[str, Any]:

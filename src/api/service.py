@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote, urlsplit
@@ -20,7 +21,15 @@ from src.obligations.candidate import (
     submit_for_review,
     validate_candidate,
 )
-from src.reconciler.writeback import PREFIX, apply, proposed_action, readback
+from src.reconciler.writeback import (
+    PREFIX,
+    apply,
+    apply_one,
+    proposed_action,
+    readback,
+    readback_mcp_one,
+    readback_sdk_one,
+)
 from src.workflow.change_to_action import decision_context, reconcile, rejected_candidate
 from src.workflow.impact import ImpactUnavailableError, analyse
 
@@ -70,6 +79,13 @@ class APIStateError(RuntimeError):
         self.affected_set_produced = affected_set_produced
 
 
+class _EntityWritebackFailure(RuntimeError):
+    def __init__(self, category: str, safe_message: str) -> None:
+        super().__init__(safe_message)
+        self.category = category
+        self.safe_message = safe_message
+
+
 class CovenantService:
     def __init__(
         self,
@@ -78,11 +94,17 @@ class CovenantService:
         impact_fn: Callable[[dict[str, Any]], dict[str, Any]] = analyse,
         apply_fn: Callable[..., dict[str, Any]] = apply,
         readback_fn: Callable[[list[dict[str, Any]]], dict[str, Any]] = readback,
+        apply_one_fn: Callable[[dict[str, Any]], None] = apply_one,
+        readback_mcp_one_fn: Callable[[dict[str, Any]], dict[str, Any]] = readback_mcp_one,
+        readback_sdk_one_fn: Callable[[dict[str, Any]], dict[str, Any]] = readback_sdk_one,
     ) -> None:
         self.store = store
         self.impact_fn = impact_fn
         self.apply_fn = apply_fn
         self.readback_fn = readback_fn
+        self.apply_one_fn = apply_one_fn
+        self.readback_mcp_one_fn = readback_mcp_one_fn
+        self.readback_sdk_one_fn = readback_sdk_one_fn
 
     def ensure_canonical_change(self) -> dict[str, Any]:
         return self.analyze_change(AnalyzeRequest())
@@ -234,6 +256,13 @@ class CovenantService:
                 "ACTIVATION_REQUIRED", "impact analysis requires an ACTIVE reviewed candidate"
             )
         previous_receipts = run.get("receipts", [])
+        run["prior_verified_receipts"] = [
+            item
+            for item in previous_receipts
+            if item.get("mcp_tag_readback_verified")
+            and item.get("sdk_receipt_readback_verified")
+        ]
+        run["prior_receipt_readback"] = run.get("receipt_readback")
         run["prior_recorded_at"] = {
             item["asset_urn"]: item.get("recorded_at") for item in previous_receipts
         }
@@ -296,11 +325,15 @@ class CovenantService:
             raise APIStateError(
                 "IMPACT_REQUIRED", "writeback requires a successful graph-derived impact plan"
             )
-        decisions = run["impact"]["decisions"]
+        decisions = self._ordered_decisions(run["impact"]["decisions"])
         prior_recorded_at = run.get("prior_recorded_at", {})
+        preserved_receipts = [
+            *run.get("receipts", []),
+            *run.get("prior_verified_receipts", []),
+        ]
         already_verified = {
             item["asset_urn"]
-            for item in run.get("receipts", [])
+            for item in preserved_receipts
             if item.get("mcp_tag_readback_verified")
             and item.get("sdk_receipt_readback_verified")
         }
@@ -309,6 +342,30 @@ class CovenantService:
             for decision in decisions
             if decision["asset_urn"] not in already_verified
         ]
+        run["writeback_events"] = []
+        now = datetime.now(timezone.utc).isoformat()
+        receipt_by_urn = {
+            item["asset_urn"]: item for item in preserved_receipts
+        }
+        for index, decision in enumerate(decisions, start=1):
+            prior_receipt = receipt_by_urn.get(decision["asset_urn"])
+            if decision["asset_urn"] in already_verified:
+                self._writeback_event(
+                    run,
+                    decision,
+                    index,
+                    "VERIFIED",
+                    response_id=decision["decision_id"],
+                    phase_started_at=prior_receipt.get("recorded_at") or now,
+                )
+            else:
+                self._writeback_event(
+                    run,
+                    decision,
+                    index,
+                    "PENDING",
+                    phase_started_at=now,
+                )
         self._event(
             run,
             "WRITING",
@@ -317,10 +374,121 @@ class CovenantService:
             5,
         )
         self.store.put_run(run_id, run)
+        states: list[dict[str, Any]] = []
+        written = 0
         try:
-            write_result = self.apply_fn(incomplete_decisions)
-            receipt_readback = self.readback_fn(decisions)
-        except Exception as exc:
+            for index, decision in enumerate(decisions, start=1):
+                if decision["asset_urn"] in already_verified:
+                    state = self._state_from_existing_receipt(run, decision)
+                    states.append(state)
+                    continue
+                response_id: str | None = None
+                try:
+                    self._writeback_event(run, decision, index, "WRITING")
+                    self.store.put_run(run_id, run)
+                    self.apply_one_fn(decision)
+                    written += 1
+                    response_id = decision["decision_id"]
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "WRITTEN",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "VERIFYING_MCP",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+                    mcp_state = self.readback_mcp_one_fn(decision)
+                    if not mcp_state.get("mcp_tags_verified"):
+                        raise _EntityWritebackFailure(
+                            "READBACK_MISMATCH",
+                            "DataHub MCP tag readback did not match the recorded proposal",
+                        )
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "MCP_VERIFIED",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "VERIFYING_SDK",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+                    sdk_state = self.readback_sdk_one_fn(decision)
+                    if not sdk_state.get("sdk_receipt_verified"):
+                        raise _EntityWritebackFailure(
+                            "READBACK_MISMATCH",
+                            "DataHub SDK property readback did not match the recorded proposal",
+                        )
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "SDK_VERIFIED",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+
+                    states.append(
+                        {
+                            "asset_urn": decision["asset_urn"],
+                            "entity_type": decision["entity_type"],
+                            **mcp_state,
+                            **sdk_state,
+                        }
+                    )
+                    self._writeback_event(
+                        run,
+                        decision,
+                        index,
+                        "VERIFIED",
+                        response_id=response_id,
+                    )
+                    self.store.put_run(run_id, run)
+                except _EntityWritebackFailure:
+                    raise
+                except Exception as exc:
+                    raise _EntityWritebackFailure(
+                        "PARTIAL_WRITE",
+                        "Native DataHub proposal write failed; retry is safe",
+                    ) from exc
+        except _EntityWritebackFailure as exc:
+            failed_index, failed_decision = self._active_writeback_target(
+                run, decisions
+            )
+            self._writeback_event(
+                run,
+                failed_decision,
+                failed_index,
+                "FAILED",
+                response_id=(
+                    failed_decision["decision_id"]
+                    if self._latest_writeback_phase(
+                        run, failed_decision["decision_id"]
+                    )
+                    not in {"PENDING", "WRITING"}
+                    else None
+                ),
+                failure={
+                    "category": exc.category,
+                    "safe_message": exc.safe_message,
+                },
+            )
             try:
                 partial_readback = self.readback_fn(decisions)
                 run["receipts"] = self._receipts(
@@ -330,18 +498,43 @@ class CovenantService:
                 pass
             self._fail(
                 run,
-                "PARTIAL_WRITE",
-                "Writeback did not reconcile; retry is safe and preserves stable identity",
+                exc.category,
+                exc.safe_message,
                 affected_set_produced=True,
             )
             self.store.put_run(run_id, run)
             raise APIStateError(
-                "PARTIAL_WRITE",
-                "Writeback did not reconcile; retry is safe and preserves stable identity",
+                exc.category,
+                exc.safe_message,
                 status_code=503,
                 retryable=True,
                 affected_set_produced=True,
             ) from exc
+        write_result = {
+            "mode": "write",
+            "proposed": len(incomplete_decisions),
+            "written": written,
+            "verified": False,
+        }
+        receipt_readback = {
+            "verified": len(states) == len(decisions)
+            and all(
+                state.get("mcp_tags_verified")
+                and state.get("sdk_receipt_verified")
+                for state in states
+            ),
+            "count": len(states),
+            "states": states,
+            "identity_set_verified": {
+                state["asset_urn"] for state in states
+            }
+            == {decision["asset_urn"] for decision in decisions},
+            "unexpected_urns": [],
+            "read_interfaces": {
+                "native_state": "DataHub MCP get_entities tags",
+                "detailed_receipt": "DataHub SDK native property-aspect read",
+            },
+        }
         change = self._change(run["change_id"])
         reconciliation = reconcile(change["candidate"], decisions, receipt_readback)
         receipts = self._receipts(decisions, receipt_readback, prior_recorded_at)
@@ -369,6 +562,132 @@ class CovenantService:
         self._event(run, "VERIFIED", "Five decisions written and five verified", 5, 5)
         self.store.put_run(run_id, run)
         return run
+
+    def writeback_progress(self, run_id: str) -> dict[str, Any]:
+        run = self._run(run_id)
+        events = run.get("writeback_events", [])
+        latest: dict[str, dict[str, Any]] = {}
+        for event in events:
+            latest[event["entity_id"]] = event
+        entities = sorted(
+            latest.values(), key=lambda event: event["sequence_index"]
+        )
+        failed = any(
+            event["phase"] == "FAILED" for event in entities
+        )
+        return {
+            "run_id": run_id,
+            "events": events,
+            "entities": entities,
+            "terminal": failed
+            or (
+                bool(entities)
+                and all(
+                    event["phase"] == "VERIFIED"
+                    for event in entities
+                )
+            ),
+            "failed": failed,
+        }
+
+    @staticmethod
+    def _ordered_decisions(
+        decisions: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        disposition_order = {
+            "allowed": 0,
+            "remediate": 1,
+            "stop_proposed": 2,
+            "human_review": 3,
+        }
+        return sorted(
+            decisions,
+            key=lambda item: (
+                disposition_order[item["proposed_disposition"]],
+                item["lineage_paths"][0] if item["lineage_paths"] else [],
+            ),
+        )
+
+    @staticmethod
+    def _writeback_event(
+        run: dict[str, Any],
+        decision: dict[str, Any],
+        sequence_index: int,
+        phase: str,
+        *,
+        response_id: str | None = None,
+        failure: dict[str, str] | None = None,
+        phase_started_at: str | None = None,
+    ) -> None:
+        run.setdefault("writeback_events", []).append(
+            {
+                "run_id": run["run_id"],
+                "entity_id": decision["decision_id"],
+                "terminal_display_name": decision["asset_name"],
+                "sequence_index": sequence_index,
+                "phase": phase,
+                "phase_started_at": phase_started_at
+                or datetime.now(timezone.utc).isoformat(),
+                "response_id": response_id,
+                "failure": failure,
+            }
+        )
+
+    @staticmethod
+    def _latest_writeback_phase(
+        run: dict[str, Any], entity_id: str
+    ) -> str | None:
+        for event in reversed(run.get("writeback_events", [])):
+            if event["entity_id"] == entity_id:
+                return event["phase"]
+        return None
+
+    def _active_writeback_target(
+        self,
+        run: dict[str, Any],
+        decisions: list[dict[str, Any]],
+    ) -> tuple[int, dict[str, Any]]:
+        for index, decision in enumerate(decisions, start=1):
+            phase = self._latest_writeback_phase(
+                run, decision["decision_id"]
+            )
+            if phase not in {"PENDING", "VERIFIED", "FAILED"}:
+                return index, decision
+        for index, decision in enumerate(decisions, start=1):
+            if (
+                self._latest_writeback_phase(run, decision["decision_id"])
+                == "PENDING"
+            ):
+                return index, decision
+        raise RuntimeError("writeback failure had no active entity")
+
+    def _state_from_existing_receipt(
+        self,
+        run: dict[str, Any],
+        decision: dict[str, Any],
+    ) -> dict[str, Any]:
+        prior = next(
+            (
+                item
+                for item in (
+                    run.get("receipt_readback")
+                    or run.get("prior_receipt_readback")
+                    or {}
+                ).get("states", [])
+                if item.get("asset_urn") == decision["asset_urn"]
+                and item.get("mcp_tags_verified")
+                and item.get("sdk_receipt_verified")
+            ),
+            None,
+        )
+        if prior is not None:
+            return prior
+        return {
+            "asset_urn": decision["asset_urn"],
+            "entity_type": decision["entity_type"],
+            **self.readback_mcp_one_fn(decision),
+            **self.readback_sdk_one_fn(decision),
+        }
 
     @staticmethod
     def _receipts(

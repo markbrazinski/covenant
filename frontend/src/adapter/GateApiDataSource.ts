@@ -11,7 +11,9 @@ import type {
   RecordingProgressDTO,
   RunProgressDTO,
   TerminalDecisionDTO,
-  VerifiedReceiptDTO
+  VerifiedReceiptDTO,
+  WritebackEntityProgressDTO,
+  WritebackProgressDTO
 } from "./contracts";
 
 interface GateApiConfig {
@@ -394,53 +396,80 @@ export class GateApiDataSource implements CovenantDataSource {
     const runId = currentRun.run_id;
     const activationId = currentRun.activation_id;
     const epoch = this.runEpoch;
-    const targetIds = this.plan?.terminals.map((item) => item.decision_id) ?? [];
-    this.emitRecording({
-      run_id: runId,
-      phase: "recording",
-      target_count: targetIds.length,
-      recorded_count: this.verifiedSlugs(currentRun).length,
-      readback_verified_count: this.verifiedSlugs(currentRun).length,
-      recorded_ids: this.recordedSlugs(currentRun),
-      verified_ids: this.verifiedSlugs(currentRun),
-      incomplete_ids: targetIds.filter((id) => !this.verifiedSlugs(currentRun).includes(id)),
-      stable_replay: false
-    });
-    try {
-      const run = await this.request<ApiRun>(
+    let settled = false;
+    let completedRun: ApiRun | null = null;
+    let writeError: unknown = null;
+    const writeRequest = this.request<ApiRun>(
         `/api/runs/${encodeURIComponent(runId)}/writeback`,
         { method: "POST" }
-      );
-      if (epoch !== this.runEpoch) return;
-      this.assertRunIdentity(run, runId, activationId);
-      this.setRun(run);
-      const recorded = this.recordedSlugs(run);
-      const verified = this.verifiedSlugs(run);
-      this.emitRecording({
-        run_id: runId,
-        phase: "verifying_readbacks",
-        target_count: targetIds.length,
-        recorded_count: recorded.length,
-        readback_verified_count: verified.length,
-        recorded_ids: recorded,
-        verified_ids: verified,
-        incomplete_ids: targetIds.filter((id) => !verified.includes(id)),
-        stable_replay: false
+      )
+      .then((run) => {
+        completedRun = run;
+      })
+      .catch((error: unknown) => {
+        writeError = error;
+      })
+      .finally(() => {
+        settled = true;
       });
-      if (!isReconciled(run)) throw new Error("Receipt reconciliation is incomplete.");
-      this.emitRecording({
-        run_id: runId,
-        phase: "reconciled",
-        target_count: targetIds.length,
-        recorded_count: recorded.length,
-        readback_verified_count: verified.length,
-        recorded_ids: recorded,
-        verified_ids: verified,
-        incomplete_ids: [],
-        stable_replay: true
-      });
-    } catch (error) {
-      if (epoch !== this.runEpoch) return;
+
+    let lastProgress: WritebackProgressDTO | null = null;
+    let lastProgressSignature = "";
+    while (epoch === this.runEpoch) {
+      try {
+        const progress = await this.request<WritebackProgressDTO>(
+          `/api/runs/${encodeURIComponent(runId)}/writeback-progress`
+        );
+        if (epoch !== this.runEpoch) break;
+        if (progress.run_id !== runId) {
+          throw new Error("Writeback progress run identity changed.");
+        }
+        lastProgress = progress;
+        const signature = progress.entities
+          .map(
+            (entity) =>
+              `${entity.entity_id}:${entity.phase}:${entity.phase_started_at}`
+          )
+          .join("|");
+        if (
+          progress.entities.length > 0 &&
+          signature !== lastProgressSignature
+        ) {
+          lastProgressSignature = signature;
+          this.emitRecording(this.mapWritebackProgress(progress));
+        }
+      } catch (progressError) {
+        if (settled) break;
+        writeError = progressError;
+        break;
+      }
+      if (settled) break;
+      await abortableDelay(this.pollIntervalMs, new AbortController().signal);
+    }
+    await writeRequest;
+    if (epoch !== this.runEpoch) return;
+
+    if (completedRun) {
+      this.assertRunIdentity(completedRun, runId, activationId);
+      this.setRun(completedRun);
+      if (!isReconciled(completedRun)) {
+        writeError = new Error("Receipt reconciliation is incomplete.");
+      } else if (!lastProgress?.terminal) {
+        const finalProgress = await this.request<WritebackProgressDTO>(
+          `/api/runs/${encodeURIComponent(runId)}/writeback-progress`
+        );
+        const finalSignature = finalProgress.entities
+          .map(
+            (entity) =>
+              `${entity.entity_id}:${entity.phase}:${entity.phase_started_at}`
+          )
+          .join("|");
+        if (finalSignature !== lastProgressSignature) {
+          this.emitRecording(this.mapWritebackProgress(finalProgress));
+        }
+      }
+    }
+    if (writeError) {
       try {
         const partial = await this.request<ApiRun>(
           `/api/runs/${encodeURIComponent(runId)}`
@@ -448,25 +477,12 @@ export class GateApiDataSource implements CovenantDataSource {
         if (epoch !== this.runEpoch) return;
         this.assertRunIdentity(partial, runId, activationId);
         this.setRun(partial);
-        const recorded = this.recordedSlugs(partial);
-        const verified = this.verifiedSlugs(partial);
-        this.emitRecording({
-          run_id: runId,
-          phase: "partial",
-          target_count: targetIds.length,
-          recorded_count: recorded.length,
-          readback_verified_count: verified.length,
-          recorded_ids: recorded,
-          verified_ids: verified,
-          incomplete_ids: targetIds.filter((id) => !verified.includes(id)),
-          stable_replay: false
-        });
       } catch (readError) {
         if (epoch !== this.runEpoch) return;
         this.emitApiError(readError, false);
         return;
       }
-      this.emitApiError(error, false);
+      this.emitApiError(writeError, false);
     }
   }
 
@@ -723,20 +739,51 @@ export class GateApiDataSource implements CovenantDataSource {
     }
   }
 
-  private recordedSlugs(run: ApiRun): string[] {
-    return run.receipts
-      .filter((item) => item.written)
-      .map((item) => this.decisionToSlug.get(item.decision_id) ?? stableTerminalSlug(item.asset_urn));
-  }
-
-  private verifiedSlugs(run: ApiRun): string[] {
-    return run.receipts
-      .filter(
-        (item) =>
-          item.mcp_tag_readback_verified &&
-          item.sdk_receipt_readback_verified
-      )
-      .map((item) => this.decisionToSlug.get(item.decision_id) ?? stableTerminalSlug(item.asset_urn));
+  private mapWritebackProgress(
+    progress: WritebackProgressDTO
+  ): RecordingProgressDTO {
+    const entityProgress: WritebackEntityProgressDTO[] =
+      progress.entities.map((entity) => ({
+        ...entity,
+        entity_id:
+          this.decisionToSlug.get(entity.entity_id) ?? entity.entity_id
+      }));
+    const verified = entityProgress
+      .filter((entity) => entity.phase === "VERIFIED")
+      .map((entity) => entity.entity_id);
+    const recorded = entityProgress
+      .filter((entity) => entity.response_id !== null)
+      .map((entity) => entity.entity_id);
+    const incomplete = entityProgress
+      .filter((entity) => entity.phase !== "VERIFIED")
+      .map((entity) => entity.entity_id);
+    const verifying = entityProgress.some((entity) =>
+      [
+        "WRITTEN",
+        "VERIFYING_MCP",
+        "MCP_VERIFIED",
+        "VERIFYING_SDK",
+        "SDK_VERIFIED"
+      ].includes(entity.phase)
+    );
+    return {
+      run_id: progress.run_id,
+      phase: progress.failed
+        ? "partial"
+        : progress.terminal
+          ? "reconciled"
+          : verifying
+            ? "verifying_readbacks"
+            : "recording",
+      target_count: entityProgress.length,
+      recorded_count: recorded.length,
+      readback_verified_count: verified.length,
+      recorded_ids: recorded,
+      verified_ids: verified,
+      incomplete_ids: incomplete,
+      stable_replay: progress.terminal && !progress.failed,
+      entity_progress: entityProgress
+    };
   }
 
   private emitRun(progress: RunProgressDTO) {

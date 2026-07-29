@@ -225,7 +225,12 @@ export function useCovenant(
     const phase = isRecordingLifecycle(machine.status)
       ? (id: string) => phaseForTerminal(machine, id)
       : globalPhase(machine.status);
-    return mapRows(terminals, phase, machine.selectedTerminalId);
+    return mapRows(
+      terminals,
+      phase,
+      machine.selectedTerminalId,
+      machine.recProgress?.entity_progress ?? []
+    );
   }, [terminals, machine]);
 
   const unaffected = useMemo<UnaffectedControlVM | null>(() => {

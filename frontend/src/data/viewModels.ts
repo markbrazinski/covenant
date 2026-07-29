@@ -10,7 +10,8 @@ import type {
   ImpactPlanDTO,
   TerminalDecisionDTO,
   EvidenceBundleDTO,
-  UnaffectedControlDTO
+  UnaffectedControlDTO,
+  WritebackEntityProgressDTO
 } from "../adapter/contracts";
 import type {
   ChangeSummary,
@@ -97,6 +98,33 @@ export function lifecycleMarker(
   }
 }
 
+/** Exact row copy for a real backend write/readback milestone. */
+export function writebackMarker(
+  disposition: DecisionDisposition,
+  progress: WritebackEntityProgressDTO
+): string {
+  switch (progress.phase) {
+    case "PENDING":
+      return "Proposed · not recorded";
+    case "WRITING":
+      return "Writing to DataHub…";
+    case "WRITTEN":
+      return "Written · verifying readback";
+    case "VERIFYING_MCP":
+      return "Verifying MCP tag readback";
+    case "MCP_VERIFIED":
+      return "MCP verified · verifying SDK readback";
+    case "VERIFYING_SDK":
+      return "Verifying SDK property readback";
+    case "SDK_VERIFIED":
+      return "Both readbacks verified";
+    case "VERIFIED":
+      return lifecycleMarker(disposition, "verified");
+    case "FAILED":
+      return `Failed · ${progress.failure?.safe_message ?? "Writeback did not complete"}`;
+  }
+}
+
 export function mapChange(dto: ChangeDetailDTO): ChangeSummary {
   return {
     provider: dto.provider,
@@ -176,12 +204,17 @@ export function mapTally(terminals: TerminalPath[]): TallyCounts {
 export function mapRows(
   terminals: TerminalPath[],
   phase: LifecyclePhase | ((id: string) => LifecyclePhase),
-  selectedId: string | null
+  selectedId: string | null,
+  entityProgress: WritebackEntityProgressDTO[] = []
 ): ImpactPlanRowVM[] {
   const phaseOf = (id: string): LifecyclePhase =>
     typeof phase === "function" ? phase(id) : phase;
+  const progressById = new Map(
+    entityProgress.map((progress) => [progress.entity_id, progress])
+  );
   return terminals.map((t, i) => {
     const p = phaseOf(t.id);
+    const progress = progressById.get(t.id);
     return {
       id: t.id,
       index: i + 1,
@@ -190,10 +223,14 @@ export function mapRows(
       owner: t.owner,
       disposition: t.disposition,
       decisionRequirement: t.decisionRequirement,
-      lifecycleMarker: lifecycleMarker(t.disposition, p),
+      lifecycleMarker: progress
+        ? writebackMarker(t.disposition, progress)
+        : lifecycleMarker(t.disposition, p),
       human: t.disposition === "human_review",
       selected: t.id === selectedId,
-      verified: p === "verified",
+      verified: progress?.phase === "VERIFIED" || p === "verified",
+      writebackPhase: progress?.phase,
+      failureMessage: progress?.failure?.safe_message,
       responseIdentity: t.responseIdentity,
       urn: t.urn,
       datahubUrl: t.datahubUrl

@@ -70,7 +70,8 @@ describe("machine", () => {
       recorded_ids: [],
       verified_ids: [],
       incomplete_ids: [],
-      stable_replay: phase === "reconciled"
+      stable_replay: phase === "reconciled",
+      entity_progress: []
     });
     s = reducer(s, { type: "REC_PROGRESS", p: rec("recording") });
     s = reducer(s, { type: "REC_PROGRESS", p: rec("verifying_readbacks") });
@@ -94,7 +95,8 @@ describe("machine", () => {
         recorded_ids: ["a", "b", "c"],
         verified_ids: ["a", "b"],
         incomplete_ids: ["d", "e"],
-        stable_replay: false
+        stable_replay: false,
+        entity_progress: []
       }
     });
     expect(s.status).toBe("partial_write");

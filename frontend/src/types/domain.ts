@@ -25,6 +25,16 @@ export type DecisionDisposition = Exclude<Disposition, "unaffected">;
  * "executed" / "enforced" state — the product proposes and records; it never enacts.
  */
 export type LifecyclePhase = "proposed" | "recorded" | "verified";
+export type VisibleWritebackPhase =
+  | "PENDING"
+  | "WRITING"
+  | "WRITTEN"
+  | "VERIFYING_MCP"
+  | "MCP_VERIFIED"
+  | "VERIFYING_SDK"
+  | "SDK_VERIFIED"
+  | "VERIFIED"
+  | "FAILED";
 
 export interface ChangeSummary {
   provider: string;
@@ -146,6 +156,10 @@ export interface ImpactPlanRowVM {
   selected: boolean;
   /** verified check for the row (Frame C). */
   verified: boolean;
+  /** Real backend write/readback phase while Beat 7 is in progress. */
+  writebackPhase?: VisibleWritebackPhase;
+  /** Safe backend failure projection; present only for FAILED. */
+  failureMessage?: string;
   responseIdentity: string;
   urn?: string;
   datahubUrl?: string;

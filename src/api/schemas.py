@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -120,6 +121,60 @@ class VerifiedReceipt(BaseModel):
     duplicate_tags: bool
     recorded_at: str | None
     datahub_url: str | None = None
+
+
+WritebackPhase = Literal[
+    "PENDING",
+    "WRITING",
+    "WRITTEN",
+    "VERIFYING_MCP",
+    "MCP_VERIFIED",
+    "VERIFYING_SDK",
+    "SDK_VERIFIED",
+    "VERIFIED",
+    "FAILED",
+]
+
+
+class WritebackFailure(BaseModel):
+    category: Literal["PARTIAL_WRITE", "READBACK_MISMATCH"]
+    safe_message: str
+
+
+class WritebackEntityEvent(BaseModel):
+    run_id: str
+    entity_id: str
+    terminal_display_name: str
+    sequence_index: int = Field(ge=1)
+    phase: WritebackPhase
+    phase_started_at: datetime
+    response_id: str | None = None
+    failure: WritebackFailure | None = None
+
+    @model_validator(mode="after")
+    def validate_phase_payload(self) -> "WritebackEntityEvent":
+        if self.phase == "FAILED" and self.failure is None:
+            raise ValueError("FAILED events require a safe failure projection")
+        if self.phase != "FAILED" and self.failure is not None:
+            raise ValueError("failure is present only for FAILED events")
+        if self.phase in {
+            "WRITTEN",
+            "VERIFYING_MCP",
+            "MCP_VERIFIED",
+            "VERIFYING_SDK",
+            "SDK_VERIFIED",
+            "VERIFIED",
+        } and self.response_id is None:
+            raise ValueError(f"{self.phase} events require a response_id")
+        return self
+
+
+class WritebackProgress(BaseModel):
+    run_id: str
+    events: list[WritebackEntityEvent] = Field(default_factory=list)
+    entities: list[WritebackEntityEvent] = Field(default_factory=list)
+    terminal: bool
+    failed: bool
 
 
 class RunDetail(BaseModel):
