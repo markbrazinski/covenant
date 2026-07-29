@@ -11,10 +11,11 @@ import type {
   UnaffectedControlVM,
   GovernedSourceReference
 } from "../types/domain";
-import { useLayoutEffect, useState } from "react";
+import { useId, useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { CausalGraph } from "./CausalGraph";
 import { ImpactTally, ImpactPlanRow, UnaffectedRow } from "./ImpactLedger";
+import { pageFirstRevealRegistry } from "./firstReveal";
 
 export type LedgerMode = "analyzing" | "unavailable" | "ledger";
 
@@ -166,29 +167,24 @@ function useFirstReveal(
   reducedMotion: boolean
 ): boolean {
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const ownerId = useId();
 
   useLayoutEffect(() => {
     if (!runId || !ready || reducedMotion) {
       setActiveKey(null);
       return;
     }
-    const storageKey = `covenant:graph-reveal:${runId}`;
-    try {
-      if (sessionStorage.getItem(storageKey)) {
-        setActiveKey(null);
-        return;
-      }
-      // Mark at animation start so navigation away/back never replays it.
-      sessionStorage.setItem(storageKey, "shown");
-    } catch {
-      // Storage restrictions should not prevent the graph from rendering.
+    if (!pageFirstRevealRegistry.claim(runId, ownerId)) {
+      setActiveKey(null);
+      return;
     }
     setActiveKey(runId);
     const timeout = window.setTimeout(() => {
+      pageFirstRevealRegistry.complete(runId, ownerId);
       setActiveKey((current) => (current === runId ? null : current));
     }, FIRST_REVEAL_WINDOW_MS);
     return () => window.clearTimeout(timeout);
-  }, [ready, reducedMotion, runId]);
+  }, [ownerId, ready, reducedMotion, runId]);
 
   return Boolean(runId && activeKey === runId && ready && !reducedMotion);
 }
