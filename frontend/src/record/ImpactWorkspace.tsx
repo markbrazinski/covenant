@@ -44,7 +44,6 @@ export interface WorkspaceProps {
   unaffected: UnaffectedControlVM | null;
   controlNote: string;
   banner?: ReactNode;
-  headerAction?: ReactNode;
   evidencePanel?: ReactNode;
   footer?: ReactNode;
   onRetry: () => void;
@@ -139,10 +138,7 @@ export function ImpactWorkspace(p: WorkspaceProps) {
             {p.banner}
             <div className={animateReveal ? "impact-outcomes-reveal" : undefined} style={{ padding: "10px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid var(--ink)" }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>Impact Plan</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                {p.headerAction}
-                {p.showTally && <ImpactTally tally={p.tally} />}
-              </div>
+              {p.showTally && <ImpactTally tally={p.tally} />}
             </div>
             <div className={animateReveal ? "impact-outcomes-reveal" : undefined} style={{ flex: 1, overflow: "auto", padding: "12px 22px" }}>
               <div style={{ display: "grid", gap: 6 }}>
