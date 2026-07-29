@@ -105,33 +105,78 @@ def proposed_action(disposition: str) -> str:
     }[disposition]
 
 
+def apply_one(decision: dict[str, Any]) -> None:
+    """Write one native proposal receipt and its public decision tags."""
+    out = emitter()
+    hub = graph()
+    aspect_type, entity_type = property_contract(decision["asset_urn"])
+    current = hub.get_aspect(decision["asset_urn"], aspect_type)
+    if current is None:
+        raise RuntimeError(
+            f"cannot write decision to missing DataHub entity: {decision['asset_urn']}"
+        )
+    updated = deepcopy(current)
+    updated.customProperties = dict(current.customProperties or {})
+    updated.customProperties.update(
+        desired_properties(decision, updated.customProperties)
+    )
+    out.emit(
+        MetadataChangeProposalWrapper(
+            entityType=entity_type,
+            entityUrn=decision["asset_urn"],
+            aspect=updated,
+        )
+    )
+    emit_decision_tags(
+        decision["asset_urn"],
+        entity_type,
+        decision["proposed_disposition"],
+        decision["decision_state"],
+    )
+
+
+def readback_mcp_one(decision: dict[str, Any]) -> dict[str, Any]:
+    """Verify one entity's expected public decision tags through live MCP."""
+    raw = call_mcp(
+        [("get_entities", {"urns": [decision["asset_urn"]]})]
+    )[0]
+    entities = raw["result"]
+    matching = [
+        entity for entity in entities if entity.get("urn") == decision["asset_urn"]
+    ]
+    tags = entity_tag_urns(matching[0]) if len(matching) == 1 else set()
+    return {
+        "asset_urn": decision["asset_urn"],
+        "mcp_tags_verified": len(matching) == 1
+        and decision_tags(
+            decision["proposed_disposition"], decision["decision_state"]
+        ).issubset(tags),
+    }
+
+
+def readback_sdk_one(decision: dict[str, Any]) -> dict[str, Any]:
+    """Verify one entity's detailed receipt through its native SDK aspect."""
+    props = native_custom_properties(decision["asset_urn"])
+    return {
+        "asset_urn": decision["asset_urn"],
+        "sdk_receipt_verified": props.get(PREFIX + "id")
+        == decision["decision_id"],
+        **{
+            key: value
+            for key, value in props.items()
+            if key.startswith(PREFIX)
+        },
+    }
+
+
 def apply(decisions: list[dict[str, Any]], *, read_only: bool = False, fail_after: int | None = None) -> dict[str, Any]:
     if read_only:
         return {"mode": "read_only", "proposed": len(decisions), "written": 0, "verified": False}
-    out = emitter()
-    hub = graph()
     written = 0
     for index, decision in enumerate(decisions):
         if fail_after is not None and index >= fail_after:
             raise RuntimeError("injected partial-write interruption")
-        aspect_type, entity_type = property_contract(decision["asset_urn"])
-        current = hub.get_aspect(decision["asset_urn"], aspect_type)
-        if current is None:
-            raise RuntimeError(f"cannot write decision to missing DataHub entity: {decision['asset_urn']}")
-        updated = deepcopy(current)
-        updated.customProperties = dict(current.customProperties or {})
-        updated.customProperties.update(desired_properties(decision, updated.customProperties))
-        out.emit(
-            MetadataChangeProposalWrapper(
-                entityType=entity_type, entityUrn=decision["asset_urn"], aspect=updated
-            )
-        )
-        emit_decision_tags(
-            decision["asset_urn"],
-            entity_type,
-            decision["proposed_disposition"],
-            decision["decision_state"],
-        )
+        apply_one(decision)
         written += 1
     return {"mode": "write", "proposed": len(decisions), "written": written, "verified": False}
 

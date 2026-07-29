@@ -250,6 +250,9 @@ describe("GateApiDataSource", () => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/api/runs")) return [impact];
       if (url.endsWith("/writeback")) return verified;
+      if (url.endsWith("/writeback-progress")) {
+        return writebackProgress("VERIFIED");
+      }
       if (url.endsWith("/runs/RUN-real")) return verified;
       return basicRoute(url, init);
     }));
@@ -282,6 +285,12 @@ describe("GateApiDataSource", () => {
           retryable: true
         }), { status: 503, headers: { "Content-Type": "application/json" } });
       }
+      if (url.endsWith("/writeback-progress")) {
+        return writebackProgress("FAILED", {
+          category: "READBACK_MISMATCH",
+          safe_message: "DataHub receipt readback did not reconcile"
+        });
+      }
       if (url.endsWith("/runs/RUN-real")) return mismatch;
       return basicRoute(url, init);
     }));
@@ -295,6 +304,60 @@ describe("GateApiDataSource", () => {
     expect(recording.some((event) => event.phase === "reconciled")).toBe(false);
     expect(recording[recording.length - 1]?.phase).toBe("partial");
     expect(errors[errors.length - 1]?.code).toBe("READBACK_MISMATCH");
+  });
+
+  it("emits row and counter progress from real polled entity phases", async () => {
+    const receipt = verifiedReceipt();
+    const verified = {
+      ...impact,
+      stage: "VERIFIED",
+      decisions: [{ ...decision, readback_verified: true }],
+      receipts: [receipt],
+      reconciliation_verified: true
+    };
+    let progressCalls = 0;
+    let finishWrite!: () => void;
+    const writeGate = new Promise<void>((resolve) => {
+      finishWrite = resolve;
+    });
+    vi.stubGlobal("fetch", routeFetch(async (url) => {
+      if (url.endsWith("/api/runs")) return [impact];
+      if (url.endsWith("/writeback")) {
+        await writeGate;
+        return verified;
+      }
+      if (url.endsWith("/writeback-progress")) {
+        progressCalls += 1;
+        if (progressCalls === 1) return writebackProgress("PENDING");
+        if (progressCalls === 2) return writebackProgress("VERIFYING_MCP");
+        finishWrite();
+        return writebackProgress("VERIFIED");
+      }
+      return basicRoute(url);
+    }));
+    const source = new GateApiDataSource({
+      baseUrl: "http://api",
+      pollIntervalMs: 1
+    });
+    await source.resumeImpact();
+    const recording: RecordingProgressDTO[] = [];
+    source.observeRecording((event) => recording.push(event));
+
+    await source.recordProposedResponses(["churn_model_a"]);
+
+    expect(recording.map((event) => event.phase)).toEqual([
+      "recording",
+      "verifying_readbacks",
+      "reconciled"
+    ]);
+    expect(
+      recording.map((event) => event.readback_verified_count)
+    ).toEqual([0, 0, 1]);
+    expect(
+      recording.map(
+        (event) => event.entity_progress[0]?.phase
+      )
+    ).toEqual(["PENDING", "VERIFYING_MCP", "VERIFIED"]);
   });
 
   it("normalizes native entity links to their Properties tab", () => {
@@ -348,6 +411,38 @@ function verifiedReceipt() {
     duplicate_tags: false,
     recorded_at: "2026-07-27T18:00:00Z",
     datahub_url: decision.datahub_url
+  };
+}
+
+function writebackProgress(
+  phase:
+    | "PENDING"
+    | "VERIFYING_MCP"
+    | "VERIFIED"
+    | "FAILED",
+  failure: {
+    category: "PARTIAL_WRITE" | "READBACK_MISMATCH";
+    safe_message: string;
+  } | null = null
+) {
+  const responseId = ["PENDING"].includes(phase)
+    ? null
+    : decision.decision_id;
+  const entity = {
+    entity_id: decision.decision_id,
+    terminal_display_name: decision.display_name,
+    sequence_index: 1,
+    phase,
+    phase_started_at: "2026-07-29T20:00:00Z",
+    response_id: responseId,
+    failure
+  };
+  return {
+    run_id: "RUN-real",
+    events: [entity],
+    entities: [entity],
+    terminal: phase === "VERIFIED" || phase === "FAILED",
+    failed: phase === "FAILED"
   };
 }
 

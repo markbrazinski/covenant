@@ -7,7 +7,8 @@ import {
   mapRows,
   mapUnaffected,
   mapEvidence,
-  DECISION_REQUIREMENT
+  DECISION_REQUIREMENT,
+  writebackMarker
 } from "../data/viewModels";
 import * as C from "../data/canonical";
 
@@ -48,6 +49,48 @@ describe("viewModels", () => {
     const terms = mapTerminals(C.impactPlan);
     const rows = mapRows(terms, "proposed", null);
     expect(rows.filter((r) => r.human)).toHaveLength(1);
+  });
+
+  it("maps every real writeback event to the locked row copy", () => {
+    const base = {
+      entity_id: "churn_model_a",
+      terminal_display_name: "Churn Model A",
+      sequence_index: 1,
+      phase_started_at: "2026-07-29T20:00:00Z",
+      response_id: "COV-real",
+      failure: null
+    };
+    const expected = {
+      PENDING: "Proposed · not recorded",
+      WRITING: "Writing to DataHub…",
+      WRITTEN: "Written · verifying readback",
+      VERIFYING_MCP: "Verifying MCP tag readback",
+      MCP_VERIFIED: "MCP verified · verifying SDK readback",
+      VERIFYING_SDK: "Verifying SDK property readback",
+      SDK_VERIFIED: "Both readbacks verified",
+      VERIFIED: "Recorded · readback verified ✓"
+    } as const;
+    for (const [phase, marker] of Object.entries(expected)) {
+      expect(
+        writebackMarker("remediate", {
+          ...base,
+          phase: phase as keyof typeof expected,
+          response_id: phase === "PENDING" || phase === "WRITING"
+            ? null
+            : base.response_id
+        })
+      ).toBe(marker);
+    }
+    expect(
+      writebackMarker("remediate", {
+        ...base,
+        phase: "FAILED",
+        failure: {
+          category: "PARTIAL_WRITE",
+          safe_message: "Native write failed safely"
+        }
+      })
+    ).toBe("Failed · Native write failed safely");
   });
 
   it("upgrades unaffected-control proof only after reconciliation", () => {

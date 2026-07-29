@@ -24,7 +24,7 @@ const STATUS: Record<ShellStatus, { text: string; color: string; dot: string; pu
   complete: { text: "Impact Plan ready", color: "var(--verify)", dot: "●", pulse: false, announce: "Impact analysis complete. Returned paths are ready for inspection." },
   recording: { text: "Recording proposals", color: "var(--remediate)", dot: "◐", pulse: true, announce: "Recording proposed responses to DataHub." },
   verifying_readbacks: { text: "Verifying readbacks", color: "var(--remediate)", dot: "◐", pulse: true, announce: "Verifying DataHub readbacks." },
-  recorded: { text: "Recorded", color: "var(--verify)", dot: "●", pulse: false, announce: "Recorded. Readbacks verified." },
+  recorded: { text: "Recorded · Verified", color: "var(--verify)", dot: "●", pulse: false, announce: "Recorded. Readbacks verified." },
   datahub_unavailable: { text: "DataHub unavailable", color: "var(--stop)", dot: "✕", pulse: false, announce: "DataHub unavailable. Affected set cleared." },
   partial_write: { text: "Partial write — action needed", color: "var(--remediate)", dot: "◐", pulse: false, announce: "Partial write. Some records incomplete." }
 };

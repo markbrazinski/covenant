@@ -149,6 +149,23 @@ export function phaseForTerminal(s: MachineState, id: string): LifecyclePhase {
   if (s.status === "recorded_verified") return "verified";
   const rp = s.recProgress;
   if (rp) {
+    const entity = rp.entity_progress.find((item) => item.entity_id === id);
+    if (entity?.phase === "VERIFIED") return "verified";
+    if (
+      entity &&
+      (
+        [
+          "WRITTEN",
+          "VERIFYING_MCP",
+          "MCP_VERIFIED",
+          "VERIFYING_SDK",
+          "SDK_VERIFIED"
+        ].includes(entity.phase) ||
+        (entity.phase === "FAILED" && entity.response_id !== null)
+      )
+    ) {
+      return "recorded";
+    }
     if (rp.verified_ids.includes(id)) return "verified";
     if (rp.recorded_ids.includes(id)) return "recorded";
   }

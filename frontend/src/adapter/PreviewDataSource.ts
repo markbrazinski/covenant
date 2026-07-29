@@ -172,7 +172,8 @@ export class PreviewDataSource implements CovenantDataSource {
     const emit = (
       phase: RecordingProgressDTO["phase"],
       incomplete: string[]
-    ) =>
+    ) => {
+      const failedId = phase === "partial" ? incomplete[0] : undefined;
       this.emitRec({
         run_id: C.impactPlan.run_id,
         phase,
@@ -182,8 +183,34 @@ export class PreviewDataSource implements CovenantDataSource {
         recorded_ids: [...this.recordedIds],
         verified_ids: [...this.verifiedIds],
         incomplete_ids: incomplete,
-        stable_replay: phase === "reconciled"
+        stable_replay: phase === "reconciled",
+        entity_progress: ids.map((id, index) => ({
+          entity_id: id,
+          terminal_display_name:
+            C.impactPlan.terminals.find(
+              (terminal) => terminal.decision_id === id
+            )?.display_name ?? id,
+          sequence_index: index + 1,
+          phase:
+            id === failedId
+              ? "FAILED"
+              : this.verifiedIds.has(id)
+                ? "VERIFIED"
+                : this.recordedIds.has(id)
+                  ? "WRITTEN"
+                  : "PENDING",
+          phase_started_at: new Date().toISOString(),
+          response_id: this.recordedIds.has(id) ? id : null,
+          failure:
+            id === failedId
+              ? {
+                  category: "PARTIAL_WRITE",
+                  safe_message: "Fixture-injected partial write"
+                }
+              : null
+        }))
       });
+    };
 
     const partial = this.fault === "partial_write" && !this.partialTriggered;
     // how many succeed on this attempt

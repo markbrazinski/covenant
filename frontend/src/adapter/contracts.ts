@@ -132,6 +132,38 @@ export interface EvidenceBundleDTO {
   available: boolean;
 }
 
+export type WritebackPhase =
+  | "PENDING"
+  | "WRITING"
+  | "WRITTEN"
+  | "VERIFYING_MCP"
+  | "MCP_VERIFIED"
+  | "VERIFYING_SDK"
+  | "SDK_VERIFIED"
+  | "VERIFIED"
+  | "FAILED";
+
+export interface WritebackEntityProgressDTO {
+  entity_id: string;
+  terminal_display_name: string;
+  sequence_index: number;
+  phase: WritebackPhase;
+  phase_started_at: string;
+  response_id: Nullable<string>;
+  failure: Nullable<{
+    category: "PARTIAL_WRITE" | "READBACK_MISMATCH";
+    safe_message: string;
+  }>;
+}
+
+export interface WritebackProgressDTO {
+  run_id: string;
+  events: WritebackEntityProgressDTO[];
+  entities: WritebackEntityProgressDTO[];
+  terminal: boolean;
+  failed: boolean;
+}
+
 /** Emitted repeatedly while proposed responses are recorded + read back. */
 export interface RecordingProgressDTO {
   run_id: string;
@@ -146,6 +178,8 @@ export interface RecordingProgressDTO {
   /** decision ids still incomplete (partial-write visibility) */
   incomplete_ids: string[];
   stable_replay: boolean;
+  /** Last real backend event for every terminal, ordered 1..N. */
+  entity_progress: WritebackEntityProgressDTO[];
 }
 
 export interface VerifiedReceiptDTO {

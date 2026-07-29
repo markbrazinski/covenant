@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import json
 import stat
+from datetime import datetime
 from pathlib import Path
 
 import anyio
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from src.api.app import configured_state_path, create_app
+from src.api.schemas import WritebackEntityEvent
 from src.api.service import CovenantService, datahub_entity_url
 from src.api.store import RunStore
 from src.obligations.candidate import SYNTHETIC_APPROVAL_LABEL
-from src.reconciler.writeback import apply, readback
+from src.reconciler.writeback import apply_one, readback
 from src.workflow.impact import ImpactUnavailableError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -286,13 +289,23 @@ def live_http_result():
     assert impact.json()["receipts"] == []
     written = client.post(f"/api/runs/{run_id}/writeback")
     assert written.status_code == 200
+    progress = client.get(f"/api/runs/{run_id}/writeback-progress")
+    assert progress.status_code == 200
     replay = client.post(f"/api/runs/{run_id}/replay")
     assert replay.status_code == 200
-    return impact.json(), written.json(), replay.json()
+    replay_progress = client.get(f"/api/runs/{run_id}/writeback-progress")
+    assert replay_progress.status_code == 200
+    return (
+        impact.json(),
+        written.json(),
+        progress.json(),
+        replay.json(),
+        replay_progress.json(),
+    )
 
 
 def test_gate3_canonical_http_flow_uses_live_mcp_and_sdk(live_http_result):
-    impact, written, _ = live_http_result
+    impact, written, _, _, _ = live_http_result
     assert impact["counts"] == {
         "allowed": 1,
         "human_review": 1,
@@ -326,27 +339,157 @@ def test_gate3_canonical_http_flow_uses_live_mcp_and_sdk(live_http_result):
 
 
 def test_gate3_http_replay_preserves_ids_and_timestamps(live_http_result):
-    _, written, replay = live_http_result
+    _, written, _, replay, replay_progress = live_http_result
     before = {item["decision_id"]: item for item in written["receipts"]}
     after = {item["decision_id"]: item for item in replay["receipts"]}
     assert before.keys() == after.keys()
     assert all(before[key]["recorded_at"] == after[key]["recorded_at"] for key in before)
     assert all(item["stable_recorded_at"] for item in replay["receipts"])
     assert all(not item["duplicate_tags"] for item in replay["receipts"])
+    assert replay_progress["terminal"] is True
+    assert replay_progress["failed"] is False
+    assert [event["phase"] for event in replay_progress["events"]] == [
+        "VERIFIED"
+    ] * 5
+    assert {
+        event["entity_id"]: datetime.fromisoformat(
+            event["phase_started_at"].replace("Z", "+00:00")
+        )
+        for event in replay_progress["events"]
+    } == {
+        item["decision_id"]: datetime.fromisoformat(item["recorded_at"])
+        for item in replay["receipts"]
+    }
+
+
+def test_gate3_writeback_event_contract_validates_every_phase():
+    phases = [
+        "PENDING",
+        "WRITING",
+        "WRITTEN",
+        "VERIFYING_MCP",
+        "MCP_VERIFIED",
+        "VERIFYING_SDK",
+        "SDK_VERIFIED",
+        "VERIFIED",
+        "FAILED",
+    ]
+    for phase in phases:
+        response_id = (
+            "COV-RESPONSE-1"
+            if phase
+            not in {
+                "PENDING",
+                "WRITING",
+            }
+            else None
+        )
+        event = WritebackEntityEvent.model_validate(
+            {
+                "run_id": "RUN-1",
+                "entity_id": "DECISION-1",
+                "terminal_display_name": "Terminal",
+                "sequence_index": 1,
+                "phase": phase,
+                "phase_started_at": "2026-07-29T12:00:00+00:00",
+                "response_id": response_id,
+                "failure": (
+                    {
+                        "category": "PARTIAL_WRITE",
+                        "safe_message": "Native DataHub proposal write failed",
+                    }
+                    if phase == "FAILED"
+                    else None
+                ),
+            }
+        )
+        assert event.phase == phase
+    with pytest.raises(ValidationError):
+        WritebackEntityEvent.model_validate(
+            {
+                "run_id": "RUN-1",
+                "entity_id": "DECISION-1",
+                "terminal_display_name": "Terminal",
+                "sequence_index": 1,
+                "phase": "VERIFIED",
+                "phase_started_at": "2026-07-29T12:00:00+00:00",
+                "response_id": None,
+                "failure": None,
+            }
+        )
+
+
+def test_gate3_writeback_progress_is_sequential_and_complete(live_http_result):
+    _, _, progress, _, _ = live_http_result
+    expected_phases = [
+        "PENDING",
+        "WRITING",
+        "WRITTEN",
+        "VERIFYING_MCP",
+        "MCP_VERIFIED",
+        "VERIFYING_SDK",
+        "SDK_VERIFIED",
+        "VERIFIED",
+    ]
+    entity_ids = [
+        event["entity_id"]
+        for event in progress["events"]
+        if event["phase"] == "PENDING"
+    ]
+    assert len(entity_ids) == 5
+    assert len(set(entity_ids)) == 5
+    for sequence_index, entity_id in enumerate(entity_ids, start=1):
+        entity_events = [
+            event
+            for event in progress["events"]
+            if event["entity_id"] == entity_id
+        ]
+        assert [event["phase"] for event in entity_events] == expected_phases
+        assert {event["sequence_index"] for event in entity_events} == {
+            sequence_index
+        }
+        assert all(
+            WritebackEntityEvent.model_validate(event) for event in entity_events
+        )
+    active_events = [
+        event for event in progress["events"] if event["phase"] != "PENDING"
+    ]
+    assert [
+        event["entity_id"]
+        for event in active_events
+        if event["phase"] == "WRITING"
+    ] == entity_ids
+    for previous, current in zip(entity_ids, entity_ids[1:]):
+        previous_verified = next(
+            index
+            for index, event in enumerate(active_events)
+            if event["entity_id"] == previous and event["phase"] == "VERIFIED"
+        )
+        current_writing = next(
+            index
+            for index, event in enumerate(active_events)
+            if event["entity_id"] == current and event["phase"] == "WRITING"
+        )
+        assert previous_verified < current_writing
+    assert progress["terminal"] is True
+    assert progress["failed"] is False
+    assert [event["phase"] for event in progress["entities"]] == [
+        "VERIFIED"
+    ] * 5
 
 
 def test_gate3_partial_write_is_visible_and_retry_converges():
-    calls = 0
-    call_sizes = []
+    apply_calls = []
+    failed_once = False
     readback_calls = 0
 
-    def interrupt_once(decisions):
-        nonlocal calls
-        calls += 1
-        call_sizes.append(len(decisions))
-        if calls == 1:
-            return apply(decisions, fail_after=2)
-        return apply(decisions)
+    def interrupt_third_once(decision):
+        nonlocal failed_once
+        apply_calls.append(decision["decision_id"])
+        if len(apply_calls) == 3 and not failed_once:
+            failed_once = True
+            raise RuntimeError("injected third-entity write failure")
+        apply_one(decision)
 
     def project_partial_once(decisions):
         nonlocal readback_calls
@@ -360,7 +503,7 @@ def test_gate3_partial_write_is_visible_and_retry_converges():
 
     service = CovenantService(
         RunStore(),
-        apply_fn=interrupt_once,
+        apply_one_fn=interrupt_third_once,
         readback_fn=project_partial_once,
     )
     client = client_for(service)
@@ -378,12 +521,35 @@ def test_gate3_partial_write_is_visible_and_retry_converges():
     assert state["reconciliation_verified"] is False
     assert len(state["receipts"]) == 5
     assert sum(item["sdk_receipt_readback_verified"] for item in state["receipts"]) == 2
+    progress = client.get(
+        f"/api/runs/{run['run_id']}/writeback-progress"
+    ).json()
+    assert progress["terminal"] is True
+    assert progress["failed"] is True
+    assert [entity["phase"] for entity in progress["entities"]] == [
+        "VERIFIED",
+        "VERIFIED",
+        "FAILED",
+        "PENDING",
+        "PENDING",
+    ]
+    failed = progress["entities"][2]
+    assert failed["response_id"] is None
+    assert failed["failure"]["category"] == "PARTIAL_WRITE"
+    assert "retry is safe" in failed["failure"]["safe_message"]
     recovered = client.post(f"/api/runs/{run['run_id']}/writeback")
     assert recovered.status_code == 200
     assert recovered.json()["stage"] == "VERIFIED"
     assert recovered.json()["reconciliation_verified"] is True
     assert len(recovered.json()["receipts"]) == 5
-    assert call_sizes == [5, 3]
+    recovered_progress = client.get(
+        f"/api/runs/{run['run_id']}/writeback-progress"
+    ).json()
+    assert [entity["phase"] for entity in recovered_progress["entities"]] == [
+        "VERIFIED"
+    ] * 5
+    assert len(apply_calls) == 6
+    assert apply_calls[2] == apply_calls[3]
     listed = client.get("/api/runs")
     assert listed.status_code == 200
     assert [item["run_id"] for item in listed.json()] == [run["run_id"]]
