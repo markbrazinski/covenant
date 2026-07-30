@@ -8,7 +8,7 @@ const executablePath = process.env.CHROME_PATH;
 const screenshotDir = process.env.COVENANT_SCREENSHOT_DIR;
 const fixturePath = resolve(
   process.env.COVENANT_BEAT0_DOCUMENT ??
-    "../fixtures/atlas_license_v4.md",
+    "../fixtures/atlas_license_v4.pdf",
 );
 
 if (!executablePath) {
