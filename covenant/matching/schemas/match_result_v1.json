@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Covenant executed governed-agreement match",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "match_id",
+    "extracted_vendor_name",
+    "extracted_obligation_id",
+    "vendor_source_evidence",
+    "obligation_source_evidence",
+    "tool_call",
+    "match_metadata"
+  ],
+  "properties": {
+    "schema_version": {"const": "covenant.match_result.v1"},
+    "match_id": {"type": "string", "pattern": "^MATCH-[a-f0-9]{20}$"},
+    "extracted_vendor_name": {"type": "string", "minLength": 1},
+    "extracted_obligation_id": {"type": "string", "minLength": 1},
+    "vendor_source_evidence": {"type": "string", "minLength": 1},
+    "obligation_source_evidence": {"type": "string", "minLength": 1},
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vendor_name_sent",
+        "obligation_id_sent",
+        "tool_result_status",
+        "tool_result_match",
+        "tool_latency_ms"
+      ],
+      "properties": {
+        "vendor_name_sent": {"type": "string"},
+        "obligation_id_sent": {"type": "string"},
+        "tool_result_status": {"enum": ["MATCH", "NOT_FOUND"]},
+        "tool_result_match": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "vendor_id",
+                "vendor_name",
+                "obligation_id",
+                "current_version",
+                "effective_date",
+                "prior_document_hash",
+                "prior_document_path",
+                "registered_at"
+              ],
+              "properties": {
+                "vendor_id": {"type": "string"},
+                "vendor_name": {"type": "string"},
+                "obligation_id": {"type": "string"},
+                "current_version": {"type": "string"},
+                "effective_date": {"type": "string"},
+                "prior_document_hash": {"type": "string"},
+                "prior_document_path": {"type": "string"},
+                "registered_at": {"type": "string"}
+              }
+            },
+            {"type": "null"}
+          ]
+        },
+        "tool_latency_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "match_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model_id",
+        "prompt_version",
+        "match_started_at",
+        "match_completed_at",
+        "input_token_count",
+        "output_token_count"
+      ],
+      "properties": {
+        "provider": {"const": "bedrock"},
+        "model_id": {"type": "string"},
+        "prompt_version": {"type": "string"},
+        "match_started_at": {"type": "string"},
+        "match_completed_at": {"type": "string"},
+        "input_token_count": {"type": "integer", "minimum": 0},
+        "output_token_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

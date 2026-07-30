@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
+from src.api.matching import (
+    TERMINAL_PHASES,
+    MatchCoordinator,
+    document_text_from_fixture,
+    document_text_from_upload,
+)
 from src.api.schemas import (
     ActivationRequest,
     AnalyzeRequest,
@@ -37,15 +45,18 @@ def create_app(
     *,
     state_path: Path | None = DEFAULT_STATE_PATH,
     service: CovenantService | None = None,
+    match_coordinator: MatchCoordinator | None = None,
 ) -> FastAPI:
     service = service or CovenantService(RunStore(state_path))
     service.ensure_canonical_change()
+    matcher = match_coordinator or MatchCoordinator(service.store, service)
     app = FastAPI(
         title="Covenant API",
         version="0.4.0",
         description="Evidence-bound obligation change to DataHub operational response.",
     )
     app.state.covenant = service
+    app.state.matches = matcher
     allowed_origins = [
         origin.strip()
         for origin in os.getenv(
@@ -92,6 +103,66 @@ def create_app(
     @app.get("/api/changes", response_model=list[ChangeSummary])
     def changes() -> list[dict[str, Any]]:
         return service.list_changes()
+
+    @app.get("/agreements/registered")
+    @app.get("/api/agreements/registered")
+    def registered_agreements() -> list[dict[str, Any]]:
+        return matcher.registered()
+
+    @app.post("/analyses/match")
+    @app.post("/api/analyses/match")
+    async def start_match(
+        document: UploadFile | None = File(default=None),
+        fixture_path: str | None = Form(default=None),
+    ) -> dict[str, str]:
+        if (document is None) == (fixture_path is None):
+            raise APIStateError(
+                "ONE_DOCUMENT_REQUIRED",
+                "provide exactly one uploaded agreement or canonical fixture reference",
+                status_code=422,
+            )
+        if document is not None:
+            filename = document.filename or "agreement"
+            text = document_text_from_upload(filename, await document.read())
+            document_ref = f"analysis-upload:{filename}"
+        else:
+            text, document_ref = document_text_from_fixture(fixture_path or "")
+        return matcher.start(text, document_ref=document_ref)
+
+    @app.get("/analyses/{match_id}")
+    @app.get("/api/analyses/{match_id}")
+    def match_detail(match_id: str) -> dict[str, Any]:
+        return matcher.detail(match_id)
+
+    @app.get("/analyses/{match_id}/events")
+    @app.get("/api/analyses/{match_id}/events")
+    async def match_events(match_id: str, request: Request) -> StreamingResponse:
+        matcher.detail(match_id)
+
+        async def stream():
+            emitted = 0
+            while True:
+                value = matcher.detail(match_id)
+                events = value["events"]
+                for event in events[emitted:]:
+                    yield (
+                        f"id: {event['sequence']}\n"
+                        f"event: {event['phase']}\n"
+                        f"data: {json.dumps(event, sort_keys=True)}\n\n"
+                    )
+                    emitted += 1
+                if value["phase"] in TERMINAL_PHASES:
+                    return
+                if await request.is_disconnected():
+                    return
+                await asyncio.sleep(0.1)
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    @app.post("/analyses/{match_id}/extract")
+    @app.post("/api/analyses/{match_id}/extract")
+    def extract_matched_agreement(match_id: str) -> dict[str, Any]:
+        return matcher.extract(match_id)
 
     @app.post("/api/changes/analyze", response_model=ChangeSummary)
     def analyze(request: AnalyzeRequest) -> dict[str, Any]:
