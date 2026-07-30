@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "covenant.candidate_delta.v1",
+  "title": "Covenant model-extracted candidate delta semantic payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "obligation_id",
+    "supersedes_version",
+    "candidate_version",
+    "effective_at",
+    "rules",
+    "material_change",
+    "unresolved_gaps"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "covenant.candidate_delta.v1"
+    },
+    "obligation_id": {
+      "type": ["string", "null"]
+    },
+    "supersedes_version": {
+      "type": ["integer", "null"]
+    },
+    "candidate_version": {
+      "type": ["integer", "null"]
+    },
+    "effective_at": {
+      "type": ["string", "null"]
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "usage_class",
+          "effect",
+          "cited_clause_verbatim",
+          "evidence_status",
+          "confidence"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "usage_class": {
+            "enum": [
+              "anonymized_derivative",
+              "customer_redistribution",
+              "internal_analytics",
+              "ml_training"
+            ]
+          },
+          "effect": {
+            "enum": [
+              "permitted",
+              "prohibited",
+              "review_required"
+            ]
+          },
+          "cited_clause_verbatim": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence_status": {
+            "enum": [
+              "SUPPORTED",
+              "GAP"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          }
+        }
+      }
+    },
+    "material_change": {
+      "type": "boolean"
+    },
+    "unresolved_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}
