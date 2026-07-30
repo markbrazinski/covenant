@@ -22,6 +22,7 @@ describe("change routes", () => {
   });
 
   it("supports the Beat 0 landing and deep-link routes", () => {
+    expect(parseHash("/")).toEqual({ name: "analyze" });
     expect(parseHash("/analyze")).toEqual({ name: "analyze" });
     expect(parseHash("/analyze/MATCH-real")).toEqual({
       name: "analysis",

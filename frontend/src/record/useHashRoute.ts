@@ -29,6 +29,7 @@ export interface Route {
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#/, "").split("/").filter(Boolean);
+  if (parts.length === 0) return { name: "analyze" };
   if (parts[0] === "analyze" && parts[1]) {
     return { name: "analysis", matchId: decodeURIComponent(parts[1]) };
   }
@@ -52,7 +53,7 @@ export function useHashRoute(): [Route, (hash: string, replace?: boolean) => voi
   );
   useEffect(() => {
     const onRoute = () => setRoute(parseHash(location.pathname));
-    if (location.pathname === "/") history.replaceState(null, "", "/changes");
+    if (location.pathname === "/") history.replaceState(null, "", "/analyze");
     window.addEventListener("popstate", onRoute);
     onRoute();
     return () => window.removeEventListener("popstate", onRoute);
