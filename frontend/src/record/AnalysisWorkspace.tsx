@@ -81,6 +81,7 @@ export function AnalysisWorkspace({
     }
     dispatch({
       type: "ERROR",
+      context: kind,
       message:
         kind === "match"
           ? "The match progress connection closed before a result was verified."
@@ -120,6 +121,7 @@ export function AnalysisWorkspace({
         ) {
           dispatch({
             type: "ERROR",
+            context: "extraction",
             message: safeError(error),
           });
         }
@@ -147,7 +149,11 @@ export function AnalysisWorkspace({
               }
             })
             .catch((error) =>
-              dispatch({ type: "ERROR", message: safeError(error) }),
+              dispatch({
+                type: "ERROR",
+                context: "match",
+                message: safeError(error),
+              }),
             );
         },
         () => disconnectError("match"),
@@ -163,7 +169,11 @@ export function AnalysisWorkspace({
         dispatch({ type: "REGISTRY_LOADED", count: agreements.length }),
       )
       .catch((error) =>
-        dispatch({ type: "ERROR", message: safeError(error) }),
+        dispatch({
+          type: "ERROR",
+          context: "registry",
+          message: safeError(error),
+        }),
       );
   }, [api]);
 
@@ -200,7 +210,11 @@ export function AnalysisWorkspace({
         }
       })
       .catch((error) =>
-        dispatch({ type: "ERROR", message: safeError(error) }),
+        dispatch({
+          type: "ERROR",
+          context: "match",
+          message: safeError(error),
+        }),
       );
   }, [
     api,
@@ -254,7 +268,11 @@ export function AnalysisWorkspace({
         navigate(`/analyze/${encodeURIComponent(accepted.match_id)}`);
         observeMatch(accepted.match_id);
       } catch (error) {
-        dispatch({ type: "ERROR", message: safeError(error) });
+        dispatch({
+          type: "ERROR",
+          context: "match",
+          message: safeError(error),
+        });
       }
     },
     [api, navigate, observeMatch],
@@ -277,7 +295,7 @@ export function AnalysisWorkspace({
     void startExtraction(state.matchId);
   }, [startExtraction, state.matchId]);
 
-  const status = statusFor(state.stage);
+  const status = statusFor(state.stage, state.errorContext);
   const agreement = matchedAgreement(state);
   const changeId =
     state.extraction?.change_id ?? state.match?.change_id ?? null;
@@ -716,7 +734,10 @@ function FailureList({ failures }: { failures: VerificationFailure[] }) {
   );
 }
 
-function statusFor(stage: AnalysisStage): {
+function statusFor(
+  stage: AnalysisStage,
+  errorContext: "registry" | "match" | "extraction" | null,
+): {
   kind: AnalysisStatusKind;
   label: string;
   announcement: string;
@@ -761,7 +782,12 @@ function statusFor(stage: AnalysisStage): {
     case "ERROR":
       return {
         kind: "warn",
-        label: "Extraction unavailable",
+        label:
+          errorContext === "extraction"
+            ? "Extraction unavailable"
+            : errorContext === "match"
+              ? "Match unavailable"
+              : "Analysis unavailable",
         announcement: "Analysis could not complete.",
       };
   }
@@ -801,7 +827,22 @@ function formatBytes(bytes: number): string {
 }
 
 function safeError(error: unknown): string {
-  if (error instanceof AnalysisApiError) return error.message;
+  if (error instanceof AnalysisApiError) {
+    switch (error.code) {
+      case "SERVICE_UNAVAILABLE":
+        return "Covenant could not reach the local analysis service.";
+      case "MATCH_NOT_FOUND":
+        return "The identified agreement is not registered as governed.";
+      case "MATCH_SOURCE_UNAVAILABLE":
+        return "The governed source document is no longer available.";
+      case "VERIFIED_MATCH_REQUIRED":
+        return "Extraction requires a verified agreement match.";
+      case "EXTRACTION_FAILED":
+        return "Extraction could not complete; no candidate was produced.";
+      default:
+        return "The analysis request could not complete safely.";
+    }
+  }
   return "The analysis request could not complete safely.";
 }
 

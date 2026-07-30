@@ -178,7 +178,7 @@ async function scenarioPage(scenario) {
   page.on("response", (response) => {
     if (response.status() >= 400) failures.responses.push(response.status());
   });
-  await page.route("http://127.0.0.1:8001/api/**", async (route) => {
+  await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/agreements/registered") {
       return fulfillJson(route, [agreement()]);

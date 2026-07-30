@@ -161,6 +161,19 @@ describe("Beat 0 analysis state machine", () => {
       "Bedrock did not respond within 30 seconds.",
     );
     expect(timedOut.errorMessage).not.toContain("provider internals");
+    expect(timedOut.errorContext).toBe("extraction");
+
+    const unknownProviderFailure = analysisReducer(uploaded(), {
+      type: "EXTRACTION_EVENT",
+      event: event(9, "EXTRACTION_FAILED", {
+        failure_category: "UNEXPECTED_PROVIDER_FAILURE",
+        message: "stack trace and private endpoint",
+      }),
+    });
+    expect(unknownProviderFailure.errorMessage).toBe(
+      "Extraction could not complete; no candidate was produced.",
+    );
+    expect(unknownProviderFailure.errorMessage).not.toContain("private");
   });
 
   it("restores deep-linked terminal state from backend evidence", () => {

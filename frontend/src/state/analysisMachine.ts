@@ -29,6 +29,7 @@ export interface AnalysisState {
   identifiedObligation: string | null;
   failures: VerificationFailure[];
   errorMessage: string | null;
+  errorContext: "registry" | "match" | "extraction" | null;
   warning: string | null;
 }
 
@@ -41,7 +42,11 @@ export type AnalysisAction =
   | { type: "EXTRACTION_EVENT"; event: ProgressEvent }
   | { type: "EXTRACTION_RESPONSE"; record: ExtractionRecord }
   | { type: "WARNING"; message: string | null }
-  | { type: "ERROR"; message: string }
+  | {
+      type: "ERROR";
+      message: string;
+      context: "registry" | "match" | "extraction";
+    }
   | { type: "RESTORE"; detail: MatchDetail }
   | { type: "RETRY_EXTRACTION" }
   | { type: "RESET" };
@@ -59,6 +64,7 @@ export const initialAnalysisState: AnalysisState = {
   identifiedObligation: null,
   failures: [],
   errorMessage: null,
+  errorContext: null,
   warning: null,
 };
 
@@ -126,6 +132,7 @@ export function analysisReducer(
           identifiedVendor,
           identifiedObligation,
           errorMessage: failureMessage(event),
+          errorContext: "match",
           warning: null,
         };
       }
@@ -165,6 +172,7 @@ export function analysisReducer(
           stage: "ERROR",
           extractionEvents: events,
           errorMessage: extractionFailureMessage(event),
+          errorContext: "extraction",
           warning: null,
         };
       }
@@ -188,6 +196,7 @@ export function analysisReducer(
         ...state,
         stage: "ERROR",
         errorMessage: action.message,
+        errorContext: action.context,
         warning: null,
       };
     case "RESTORE":
@@ -200,6 +209,7 @@ export function analysisReducer(
         extraction: null,
         failures: [],
         errorMessage: null,
+        errorContext: null,
         warning: null,
       };
     case "RESET":
@@ -254,6 +264,12 @@ function restoreAnalysis(
         : detail.phase === "MATCH_REJECTED"
           ? failureMessage(detail.events[detail.events.length - 1] ?? {})
           : null,
+    errorContext:
+      terminal?.phase === "EXTRACTION_FAILED"
+        ? "extraction"
+        : detail.phase === "MATCH_REJECTED"
+          ? "match"
+          : null,
     warning: null,
   };
 }
@@ -273,12 +289,16 @@ function failureMessage(event: ProgressEvent): string {
 }
 
 function extractionFailureMessage(event: ProgressEvent): string {
-  if (event.failure_category === "TIMEOUT") {
-    return "Bedrock did not respond within 30 seconds.";
+  switch (event.failure_category) {
+    case "TIMEOUT":
+      return "Bedrock did not respond within 30 seconds.";
+    case "MODEL_UNAVAILABLE":
+      return "The configured Bedrock model is temporarily unavailable.";
+    case "SOURCE_UNAVAILABLE":
+      return "The governed source document is no longer available.";
+    default:
+      return "Extraction could not complete; no candidate was produced.";
   }
-  return typeof event.message === "string"
-    ? event.message
-    : "Extraction could not complete; no candidate was produced.";
 }
 
 export function matchedAgreement(
