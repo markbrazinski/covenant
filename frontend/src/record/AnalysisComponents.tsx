@@ -207,6 +207,7 @@ export function AgentActivityPanel({
 
 export interface SelectedDocument {
   name: string;
+  typeLabel: "PDF" | "MD" | "TXT";
   sizeLabel: string;
   sha256Label: string;
 }
@@ -269,7 +270,7 @@ export function DocumentSlot({
           </div>
           <div className="analysis-document-file">
             <span className="mono analysis-pdf-chip" aria-hidden="true">
-              PDF
+              {document.typeLabel}
             </span>
             <span>
               <strong className="mono analysis-document-name">

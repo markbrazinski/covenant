@@ -9,16 +9,30 @@ import { useEffect, useState } from "react";
  *   /changes/:changeId/impact
  *   /impact-plans
  *   /impact-plans/:planId
+ *   /analyze
+ *   /analyze/:matchId
  */
-export type RouteName = "changes" | "change" | "impact" | "plans" | "plan";
+export type RouteName =
+  | "changes"
+  | "change"
+  | "impact"
+  | "plans"
+  | "plan"
+  | "analyze"
+  | "analysis";
 export interface Route {
   name: RouteName;
   changeId?: string;
   planId?: string;
+  matchId?: string;
 }
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#/, "").split("/").filter(Boolean);
+  if (parts[0] === "analyze" && parts[1]) {
+    return { name: "analysis", matchId: decodeURIComponent(parts[1]) };
+  }
+  if (parts[0] === "analyze") return { name: "analyze" };
   if (parts[0] === "impact-plans" && parts[1]) {
     return { name: "plan", planId: decodeURIComponent(parts[1]) };
   }

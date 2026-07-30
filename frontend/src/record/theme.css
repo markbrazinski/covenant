@@ -144,6 +144,91 @@
   gap: 26px;
 }
 
+.analysis-page-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.analysis-page-intro {
+  max-width: 760px;
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.analysis-registry-count {
+  margin: 10px 0 20px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.analysis-retained-copy {
+  margin: 10px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.analysis-amends {
+  margin: 9px 0;
+  color: var(--neutral);
+  font-size: 10px;
+  text-align: center;
+}
+
+.analysis-warning {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-line);
+  color: var(--amber-body);
+  background: var(--amber-wash);
+  font-size: 12px;
+}
+
+.analysis-summary {
+  margin-top: 16px;
+  padding-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px 30px;
+  border-top: 1px solid var(--verify-divider);
+}
+
+.analysis-actions {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.analysis-failure-list {
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.analysis-failure-list li {
+  padding-top: 8px;
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid var(--warn-line);
+  color: var(--warn-body);
+  font-size: 12px;
+}
+
+.analysis-failure-list .mono {
+  color: var(--warn-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
 .analysis-main {
   min-width: 0;
 }
@@ -187,6 +272,10 @@
   border: 1px solid var(--line);
   border-radius: 2px;
   background: var(--surface);
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    background-color 180ms ease-out;
 }
 .analysis-card--matched {
   color: var(--matched-ink);
@@ -255,6 +344,9 @@
   display: flex;
   align-items: center;
   gap: 13px;
+  transition:
+    color 180ms ease-out,
+    opacity 180ms ease-out;
 }
 
 .analysis-phase-dot,
@@ -271,6 +363,11 @@
   background: var(--surface);
   font-size: 9px;
   font-weight: 700;
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    background-color 180ms ease-out,
+    transform 180ms ease-out;
 }
 
 .analysis-phase-label {
@@ -335,6 +432,7 @@
   border: 1px solid var(--activity-line);
   border-radius: 2px;
   background: var(--surface);
+  animation: analysisReceiptEnter 220ms ease-out both;
 }
 
 .analysis-receipt-header {
@@ -434,6 +532,7 @@
 
 .analysis-matched-card {
   position: relative;
+  animation: analysisMatchedEnter 260ms ease-out both;
 }
 .analysis-matched-card--subdued {
   opacity: .6;
@@ -480,6 +579,7 @@
 .analysis-notice {
   margin-top: 22px;
   padding: 20px 22px;
+  animation: analysisNoticeEnter 220ms ease-out both;
 }
 .analysis-notice h2 {
   margin: 0;
@@ -491,6 +591,39 @@
   color: inherit;
   font-size: 13px;
   line-height: 1.55;
+}
+
+@keyframes analysisReceiptEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes analysisMatchedEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes analysisNoticeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 920px) {
@@ -606,6 +739,11 @@
 @media (prefers-reduced-motion: reduce) {
   .analysis-phase--active .analysis-phase-dot,
   .analysis-receipt--active .analysis-receipt-dot {
+    animation: none;
+  }
+  .analysis-receipt,
+  .analysis-matched-card,
+  .analysis-notice {
     animation: none;
   }
   .rec-pulse {

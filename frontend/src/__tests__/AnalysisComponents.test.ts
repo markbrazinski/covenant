@@ -76,6 +76,7 @@ describe("Beat 0 analysis components", () => {
       createElement(DocumentSlot, {
         document: {
           name: "atlas_license_v4.pdf",
+          typeLabel: "PDF",
           sizeLabel: "418 KB",
           sha256Label: "3b7e10…",
         },
