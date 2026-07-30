@@ -1,13 +1,14 @@
 # Covenant — Record (frontend)
 
-React + TypeScript implementation of the locked **Record** visual system and **Layered Causal
-Graph**, integrated with the real Covenant Gate 3 API by default.
+React + TypeScript implementation of Covenant's bounded agreement-analysis,
+review, layered causal graph, evidence, and native receipt experience. The real
+Covenant API is the default.
 
 ```bash
 cd frontend
-npm install
 cp .env.example .env
-npm run dev        # http://localhost:5173/changes
+npm ci
+npm run dev        # http://127.0.0.1:5173/analyze
 npm run build      # tsc --noEmit && vite build
 npm run test       # vitest (state machine, preview adapter, view models)
 ```
@@ -17,7 +18,7 @@ reduced motion, and dev controls (`?dev`) — is in **[`src/record/README.md`](.
 
 ## Structure
 
-- `src/record/` — the Record view + History API routing shell (the app).
+- `src/record/` — Analyze, review, impact, and recorded-plan views plus the History API routing shell.
 - `src/adapter/` — `CovenantDataSource`, the real `GateApiDataSource`, and an explicit
   `PreviewDataSource` for isolated design tests.
 - `src/state/` — state machine + `useCovenant` hook.

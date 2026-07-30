@@ -79,6 +79,13 @@ screenshots/
 *.mp4
 *.webm
 
+# Curated, sanitized submission evidence is intentionally public.
+!examples/
+!examples/README.md
+!examples/*.json
+!examples/screenshots/
+!examples/screenshots/*.png
+
 # Local state databases and transient tool output
 *.db
 *.sqlite

@@ -6,7 +6,7 @@ Causal Graph**.
 ## Where it lives / how to run
 
 - Entry page: **`/index.html`** → `src/record/main.tsx`.
-- Dev: `npm install && npm run dev`, then open **`http://localhost:5173/`**.
+- Dev: `npm ci && npm run dev`, then open **`http://127.0.0.1:5173/analyze`**.
 - Build: `npm run build` (`tsc --noEmit && vite build`).
 - Recorded plans come from persisted, reconciled Gate 3 runs and survive reload.
 
@@ -14,6 +14,8 @@ Causal Graph**.
 
 | Route | Screen |
 |---|---|
+| `/analyze` | Upload a bounded Markdown/PDF agreement and start registry matching |
+| `/analyze/:matchId` | Live match, extraction, and deterministic-verification progress |
 | `/changes` | Reviewed data-use changes queue |
 | `/changes/:changeId` | Reviewed change, rule deltas, explicit human activation |
 | `/changes/:changeId/impact` | Analyzing → source resolve → graph population → Impact Plan → selection circuit → recording |

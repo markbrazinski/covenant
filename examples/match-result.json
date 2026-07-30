@@ -1,0 +1,47 @@
+{
+  "match_id": "MATCH-d82af33463854f8d2681",
+  "phase": "MATCH_VERIFIED",
+  "events": [
+    {"phase": "MATCH_STARTED", "sequence": 1},
+    {"phase": "IDENTIFYING_VENDOR", "sequence": 2},
+    {
+      "obligation_id_sent": "ATLAS-LIC-004",
+      "phase": "TOOL_CALLED",
+      "sequence": 3,
+      "vendor_name_sent": "Atlas Signals"
+    },
+    {"phase": "TOOL_RETURNED", "sequence": 4, "status": "MATCH"},
+    {"phase": "MATCH_VERIFYING", "sequence": 5},
+    {"phase": "MATCH_VERIFIED", "sequence": 6}
+  ],
+  "result": {
+    "extracted_obligation_id": "ATLAS-LIC-004",
+    "extracted_vendor_name": "Atlas Signals",
+    "match_id": "MATCH-d82af33463854f8d2681",
+    "match_metadata": {
+      "model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "prompt_version": "agreement-match-v1.0.0",
+      "provider": "bedrock"
+    },
+    "obligation_source_evidence": "ATLAS-LIC-004 — VERSION 4",
+    "schema_version": "covenant.match_result.v1",
+    "tool_call": {
+      "obligation_id_sent": "ATLAS-LIC-004",
+      "tool_result_match": {
+        "current_version": "v3",
+        "effective_date": "2025-07-01T00:00:00Z",
+        "obligation_id": "ATLAS-LIC-004",
+        "prior_document_hash": "511fb8b69bb5a01031d0290fcadb3036a17b08030014289fafd4f69e4005167d",
+        "prior_document_path": "fixtures/atlas_license_v3.md",
+        "vendor_id": "urn:li:covenantVendor:atlas-signals",
+        "vendor_name": "Atlas Signals"
+      },
+      "tool_result_status": "MATCH",
+      "vendor_name_sent": "Atlas Signals"
+    },
+    "vendor_source_evidence": "Atlas Signals License"
+  },
+  "verification": {
+    "status": "PASS"
+  }
+}
