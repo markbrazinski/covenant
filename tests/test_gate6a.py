@@ -12,6 +12,7 @@ from covenant.extraction.bedrock import (
     load_schema,
 )
 from covenant.extraction.service import extract_candidate
+from covenant.extraction.progress import observe_extraction_progress
 from src.obligations.candidate import CANDIDATE_DELTA_SCHEMA, SUPPORTED_USAGES
 
 
@@ -151,6 +152,60 @@ def test_gate6a_model_output_is_wrapped_in_the_executed_candidate_contract():
     request = client.calls[0]
     assert request["inferenceConfig"]["temperature"] == 0.0
     assert request["outputConfig"]["textFormat"]["type"] == "json_schema"
+
+
+def test_gate6c_progress_observer_does_not_change_gate6a_output():
+    baseline = extract_candidate(
+        PRIOR,
+        CANDIDATE,
+        prior_ref="fixtures/atlas_license_v3.md",
+        candidate_ref="fixtures/atlas_license_v4.md",
+        extractor=BedrockCandidateExtractor(
+            model_id="test.anthropic-model",
+            client=FakeConverse(),
+        ),
+        now=lambda: NOW,
+    )
+    events = []
+    with observe_extraction_progress(
+        lambda phase, data: events.append((phase, data))
+    ):
+        observed = extract_candidate(
+            PRIOR,
+            CANDIDATE,
+            prior_ref="fixtures/atlas_license_v3.md",
+            candidate_ref="fixtures/atlas_license_v4.md",
+            extractor=BedrockCandidateExtractor(
+                model_id="test.anthropic-model",
+                client=FakeConverse(),
+            ),
+            now=lambda: NOW,
+        )
+    assert observed == baseline
+    assert [phase for phase, _ in events] == [
+        "EXTRACTING_BEDROCK",
+        "MODEL_OUTPUT_RECEIVED",
+    ]
+
+
+def test_gate6c_progress_observer_failure_cannot_change_extraction():
+    def unavailable_observer(_phase, _data):
+        raise RuntimeError("observer unavailable")
+
+    with observe_extraction_progress(unavailable_observer):
+        result = extract_candidate(
+            PRIOR,
+            CANDIDATE,
+            prior_ref="fixtures/atlas_license_v3.md",
+            candidate_ref="fixtures/atlas_license_v4.md",
+            extractor=BedrockCandidateExtractor(
+                model_id="test.anthropic-model",
+                client=FakeConverse(),
+            ),
+            now=lambda: NOW,
+        )
+    assert result.status == "EXTRACTED_UNVERIFIED"
+    assert result.candidate is not None
 
 
 def test_gate6a_source_injection_is_framed_as_evidence_not_instruction():

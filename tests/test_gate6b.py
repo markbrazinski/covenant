@@ -9,6 +9,7 @@ import pytest
 
 from covenant.extraction.bedrock import ModelExtraction
 from covenant.extraction.service import build_candidate
+from covenant.extraction.progress import observe_extraction_progress
 from covenant.extraction.verifier import (
     verify_and_submit_for_review,
     verify_candidate_delta,
@@ -114,6 +115,23 @@ def test_gate6b_canonical_candidate_passes_under_200_milliseconds():
     elapsed_ms = (perf_counter() - started) * 1000
     assert result == {"status": "PASS"}
     assert elapsed_ms < 200
+
+
+def test_gate6c_progress_observer_does_not_change_gate6b_decision():
+    baseline = verify_candidate_delta(candidate(), documents())
+    events = []
+    with observe_extraction_progress(
+        lambda phase, data: events.append((phase, data))
+    ):
+        observed = verify_candidate_delta(candidate(), documents())
+    assert observed == baseline == {"status": "PASS"}
+    assert [phase for phase, _ in events] == [
+        "VERIFYING_SCHEMA",
+        "VERIFYING_CITATIONS_AND_RULES",
+        "VERIFYING_CANDIDATE_CONSISTENCY",
+        "VERIFICATION_COMPLETED",
+    ]
+    assert events[-1][1] == {"status": "PASS", "failure_count": 0}
 
 
 def test_gate6b_hallucinated_citation_is_rejected_with_rule_id():

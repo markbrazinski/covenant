@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Any, Callable
 
 from covenant.extraction import BedrockCandidateExtractor, extract_candidate
+from covenant.extraction.progress import observe_extraction_progress
 from covenant.matching import BedrockAgreementMatcher, execute_match
 from covenant.matching.verifier import match_identity
 from covenant.registry import DataHubAgreementRegistry
@@ -20,6 +21,11 @@ from .store import RunStore
 ROOT = Path(__file__).resolve().parents[2]
 MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
 TERMINAL_PHASES = {"MATCH_VERIFIED", "MATCH_REJECTED", "MATCH_NOT_FOUND"}
+EXTRACTION_TERMINAL_PHASES = {
+    "CANDIDATE_READY",
+    "EXTRACTION_REJECTED",
+    "EXTRACTION_FAILED",
+}
 
 
 class MatchCoordinator:
@@ -56,6 +62,8 @@ class MatchCoordinator:
             "verification": None,
             "receipt": None,
             "change_id": None,
+            "extraction_phase": None,
+            "extraction_events": [],
         }
         self.store.put_analysis(match_id, analysis)
         with self._lock:
@@ -96,48 +104,103 @@ class MatchCoordinator:
                 "VERIFIED_MATCH_REQUIRED",
                 "candidate extraction requires a deterministically verified registry match",
             )
-        with self._lock:
-            source = self._documents.get(match_id)
-        if source is None:
-            raise APIStateError(
-                "MATCH_SOURCE_UNAVAILABLE",
-                "the matched source document is no longer available; run matching again",
-                status_code=410,
-            )
-        candidate_text, candidate_ref = source
-        match = analysis["result"]["tool_call"]["tool_result_match"]
-        prior_path = resolve_prior_document(match["prior_document_path"])
-        prior_text = prior_path.read_text()
-        result = extract_candidate(
-            prior_text,
-            candidate_text,
-            prior_ref=match["prior_document_path"],
-            candidate_ref=candidate_ref,
-            extractor=self.extractor_factory(),
-        )
-        if result.status != "EXTRACTED_UNVERIFIED" or result.candidate is None:
-            raise APIStateError(
-                "EXTRACTION_FAILED",
-                result.receipt.get(
-                    "safe_message",
-                    "Bedrock extraction did not produce a candidate",
-                ),
-                status_code=502,
-                retryable=True,
-            )
-        record = self.covenant_service.record_verified_extraction(
-            result.candidate,
-            {
-                match["prior_document_path"]: prior_text,
-                candidate_ref: candidate_text,
-            },
-            result.receipt,
-            current_active_version=int(match["current_version"].removeprefix("v")),
-            provider_name=match["vendor_name"],
-        )
-        analysis["change_id"] = record.get("change_id")
+        analysis["extraction_phase"] = None
+        analysis["extraction_events"] = []
         self.store.put_analysis(match_id, analysis)
-        return record
+        try:
+            self._extraction_event(match_id, "PREPARING_SOURCES", {})
+            with self._lock:
+                source = self._documents.get(match_id)
+            if source is None:
+                raise APIStateError(
+                    "MATCH_SOURCE_UNAVAILABLE",
+                    "the matched source document is no longer available; run matching again",
+                    status_code=410,
+                )
+            candidate_text, candidate_ref = source
+            match = analysis["result"]["tool_call"]["tool_result_match"]
+            prior_path = resolve_prior_document(match["prior_document_path"])
+            prior_text = prior_path.read_text()
+            with observe_extraction_progress(
+                lambda phase, data: self._extraction_event(
+                    match_id,
+                    phase,
+                    data,
+                )
+            ):
+                result = extract_candidate(
+                    prior_text,
+                    candidate_text,
+                    prior_ref=match["prior_document_path"],
+                    candidate_ref=candidate_ref,
+                    extractor=self.extractor_factory(),
+                )
+                if (
+                    result.status != "EXTRACTED_UNVERIFIED"
+                    or result.candidate is None
+                ):
+                    message = result.receipt.get(
+                        "safe_message",
+                        "Bedrock extraction did not produce a candidate",
+                    )
+                    self._extraction_event(
+                        match_id,
+                        "EXTRACTION_FAILED",
+                        {
+                            "message": message,
+                            "failure_category": result.receipt.get(
+                                "failure_category",
+                                "INVOCATION_FAILED",
+                            ),
+                        },
+                    )
+                    raise APIStateError(
+                        "EXTRACTION_FAILED",
+                        message,
+                        status_code=502,
+                        retryable=True,
+                    )
+                record = self.covenant_service.record_verified_extraction(
+                    result.candidate,
+                    {
+                        match["prior_document_path"]: prior_text,
+                        candidate_ref: candidate_text,
+                    },
+                    result.receipt,
+                    current_active_version=int(
+                        match["current_version"].removeprefix("v")
+                    ),
+                    provider_name=match["vendor_name"],
+                )
+            if record["verification"]["status"] != "PASS":
+                self._extraction_event(
+                    match_id,
+                    "EXTRACTION_REJECTED",
+                    {"failures": record["verification"].get("failures", [])},
+                )
+            else:
+                self._extraction_event(
+                    match_id,
+                    "CANDIDATE_READY",
+                    {
+                        "change_id": record.get("change_id"),
+                        "rule_count": len(record["candidate"]["rules"]),
+                        "citation_count": len(record["candidate"]["rules"]),
+                    },
+                )
+            current = self.detail(match_id)
+            current["change_id"] = record.get("change_id")
+            self.store.put_analysis(match_id, current)
+            return record
+        except APIStateError:
+            raise
+        except Exception:
+            self._extraction_event(
+                match_id,
+                "EXTRACTION_FAILED",
+                {"message": "Extraction failed safely; no candidate was produced"},
+            )
+            raise
 
     def _run_match(self, match_id: str) -> None:
         with self._lock:
@@ -214,6 +277,24 @@ class MatchCoordinator:
         analysis["events"].append(
             {
                 "sequence": len(analysis["events"]) + 1,
+                "phase": phase,
+                **data,
+            }
+        )
+        self.store.put_analysis(match_id, analysis)
+
+    def _extraction_event(
+        self,
+        match_id: str,
+        phase: str,
+        data: dict[str, Any],
+    ) -> None:
+        analysis = self.detail(match_id)
+        events = analysis.setdefault("extraction_events", [])
+        analysis["extraction_phase"] = phase
+        events.append(
+            {
+                "sequence": len(events) + 1,
                 "phase": phase,
                 **data,
             }

@@ -13,6 +13,7 @@ from src.obligations.candidate import (
     stable_json_hash,
     submit_for_review,
 )
+from .progress import emit_extraction_progress
 
 
 SourceValue = str | Mapping[str, Any]
@@ -334,6 +335,7 @@ def verify_candidate_delta(
     )
     failures: list[dict[str, Any]] = []
 
+    emit_extraction_progress("VERIFYING_SCHEMA")
     validator = Draft202012Validator(_executed_candidate_schema())
     for error in sorted(
         validator.iter_errors(candidate),
@@ -442,6 +444,7 @@ def verify_candidate_delta(
     safe_rules = candidate_rules if isinstance(candidate_rules, list) else []
     seen_rule_ids: set[str] = set()
     seen_effects: dict[str, set[str]] = {}
+    emit_extraction_progress("VERIFYING_CITATIONS_AND_RULES")
     for rule in safe_rules:
         if not isinstance(rule, Mapping):
             continue
@@ -588,6 +591,7 @@ def verify_candidate_delta(
             )
         )
 
+    emit_extraction_progress("VERIFYING_CANDIDATE_CONSISTENCY")
     effective_at = candidate.get("effective_at")
     effective_datetime: datetime | None = None
     if not isinstance(effective_at, str):
@@ -722,6 +726,13 @@ def verify_candidate_delta(
             item["rule_id"] or "",
             item["message"],
         )
+    )
+    emit_extraction_progress(
+        "VERIFICATION_COMPLETED",
+        {
+            "status": "PASS" if not unique_failures else "REJECT",
+            "failure_count": len(unique_failures),
+        },
     )
     return (
         {"status": "PASS"}

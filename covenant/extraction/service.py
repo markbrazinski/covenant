@@ -7,6 +7,7 @@ from typing import Any, Callable
 from src.obligations.candidate import sha256_text, stable_json_hash
 
 from .bedrock import BedrockCandidateExtractor, BedrockInvocationError, ModelExtraction
+from .progress import emit_extraction_progress
 
 
 Clock = Callable[[], datetime]
@@ -33,6 +34,7 @@ def extract_candidate(
 ) -> ExtractionResult:
     clock = now or (lambda: datetime.now(timezone.utc))
     started_at = clock().astimezone(timezone.utc).isoformat()
+    emit_extraction_progress("EXTRACTING_BEDROCK")
     try:
         model = extractor.extract(prior_text, candidate_text)
     except BedrockInvocationError as exc:
@@ -51,6 +53,7 @@ def extract_candidate(
                 "extraction_completed_at": completed_at,
             },
         )
+    emit_extraction_progress("MODEL_OUTPUT_RECEIVED")
     completed_at = clock().astimezone(timezone.utc).isoformat()
     if (
         model.payload["material_change"] is False
