@@ -8,6 +8,7 @@ from urllib.parse import quote, urlsplit
 
 from datahub.metadata.schema_classes import GlobalTagsClass
 
+from covenant.extraction import verify_and_submit_for_review
 from src.api.schemas import AnalyzeRequest
 from src.api.store import RunStore
 from src.datahub_client.core import entity_urn, graph
@@ -151,6 +152,118 @@ class CovenantService:
                 old_ref: sha256_text(old_text),
                 new_ref: sha256_text(new_text),
             },
+        }
+        self.store.put_change(change_id, record)
+        return record
+
+    def record_verified_extraction(
+        self,
+        candidate: dict[str, Any],
+        documents: dict[str, Any],
+        extraction_receipt: dict[str, Any],
+        *,
+        current_active_version: int,
+        provider_name: str = "Atlas Signals",
+    ) -> dict[str, Any]:
+        """Verify a model extraction before recording any reviewable change."""
+        verified_candidate, verification, transition = (
+            verify_and_submit_for_review(
+                candidate,
+                documents,
+                current_active_version=current_active_version,
+            )
+        )
+        if verification["status"] != "PASS":
+            return {
+                "change_id": None,
+                "provider_name": provider_name,
+                "candidate": verified_candidate,
+                "candidate_hash": None,
+                "validation": {
+                    "valid": False,
+                    "errors": verification["failures"],
+                    "candidate_delta_id": candidate.get("candidate_delta_id"),
+                },
+                "verification": verification,
+                "extraction_receipt": extraction_receipt,
+                "transitions": [],
+                "persisted": False,
+            }
+        candidate_delta_id = candidate.get("candidate_delta_id")
+        if not isinstance(candidate_delta_id, str) or not candidate_delta_id:
+            raise APIStateError(
+                "INVALID_EXTRACTED_CANDIDATE",
+                "model extraction has no stable candidate identity",
+                status_code=422,
+            )
+        extraction_metadata = candidate.get("extraction_metadata")
+        metadata_keys = {
+            "provider",
+            "model_id",
+            "prompt_version",
+            "schema_version",
+            "extraction_started_at",
+            "extraction_completed_at",
+            "input_token_count",
+            "output_token_count",
+        }
+        receipt_matches = (
+            isinstance(extraction_metadata, dict)
+            and extraction_receipt.get("status") == "EXTRACTED_UNVERIFIED"
+            and isinstance(extraction_receipt.get("attempts"), int)
+            and extraction_receipt["attempts"] >= 1
+            and all(
+                extraction_receipt.get(key) == extraction_metadata.get(key)
+                for key in metadata_keys
+            )
+        )
+        if not receipt_matches:
+            raise APIStateError(
+                "INVALID_EXTRACTION_RECEIPT",
+                "extraction receipt does not match the verified Bedrock candidate",
+                status_code=422,
+            )
+        change_id = candidate_delta_id.replace("DELTA-", "CHANGE-", 1)
+        normalized_documents: dict[str, str] = {}
+        for ref, value in documents.items():
+            if isinstance(value, str):
+                normalized_documents[ref] = value
+            elif isinstance(value, dict) and isinstance(value.get("text"), str):
+                normalized_documents[ref] = value["text"]
+            else:
+                raise APIStateError(
+                    "INVALID_SOURCE_DOCUMENT",
+                    "source document has no verifiable text",
+                    status_code=422,
+                )
+        document_hashes = {
+            ref: sha256_text(text)
+            for ref, text in normalized_documents.items()
+        }
+        existing = self.store.get_change(change_id)
+        if existing:
+            if existing.get("document_hashes") != document_hashes:
+                raise APIStateError(
+                    "IMMUTABLE_CHANGE_CONFLICT",
+                    "stored change identity is bound to different source documents",
+                )
+            return existing
+        record = {
+            "change_id": change_id,
+            "provider_name": provider_name,
+            "candidate": verified_candidate,
+            "candidate_hash": stable_json_hash(verified_candidate),
+            "validation": {
+                "valid": verification["status"] == "PASS",
+                "errors": verification.get("failures", []),
+                "candidate_delta_id": candidate_delta_id,
+            },
+            "verification": verification,
+            "extraction_receipt": extraction_receipt,
+            "transitions": [transition] if transition else [],
+            "documents": normalized_documents,
+            "document_hashes": document_hashes,
+            "persisted": True,
         }
         self.store.put_change(change_id, record)
         return record
