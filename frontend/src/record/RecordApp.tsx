@@ -32,10 +32,15 @@ import type {
   EvidenceBundleVM
 } from "../types/domain";
 import { AppShell, ContextStrip, type ShellStatus } from "./AppShell";
-import { useHashRoute, usePrefersReducedMotion } from "./useHashRoute";
+import {
+  useHashRoute,
+  usePrefersReducedMotion,
+  type Route,
+} from "./useHashRoute";
 import { ChangesQueue, ReviewedChange } from "./Changes";
 import { PlansIndex, GovernanceBackBand, type RecordedPlan } from "./Plans";
 import { ImpactWorkspace, type LedgerMode } from "./ImpactWorkspace";
+import { AnalysisWorkspace } from "./AnalysisWorkspace";
 import {
   EvidenceBundle,
   GovernanceHold,
@@ -48,6 +53,26 @@ const LEGACY_CHANGE_ALIAS = "atlas-v3-v4";
 
 export function RecordApp() {
   const [route, navigate] = useHashRoute();
+  if (route.name === "analyze" || route.name === "analysis") {
+    return (
+      <div className="record-root">
+        <AnalysisWorkspace
+          routedMatchId={route.matchId}
+          navigate={navigate}
+        />
+      </div>
+    );
+  }
+  return <RecordExperience route={route} navigate={navigate} />;
+}
+
+function RecordExperience({
+  route,
+  navigate,
+}: {
+  route: Route;
+  navigate: (path: string, replace?: boolean) => void;
+}) {
   const initialRoutedChangeId = useRef(
     route.changeId === LEGACY_CHANGE_ALIAS ? undefined : route.changeId
   ).current;

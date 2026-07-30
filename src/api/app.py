@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api.matching import (
+    EXTRACTION_TERMINAL_PHASES,
     TERMINAL_PHASES,
     MatchCoordinator,
     document_text_from_fixture,
@@ -163,6 +164,34 @@ def create_app(
     @app.post("/api/analyses/{match_id}/extract")
     def extract_matched_agreement(match_id: str) -> dict[str, Any]:
         return matcher.extract(match_id)
+
+    @app.get("/analyses/{match_id}/extraction-events")
+    @app.get("/api/analyses/{match_id}/extraction-events")
+    async def extraction_events(
+        match_id: str,
+        request: Request,
+    ) -> StreamingResponse:
+        matcher.detail(match_id)
+
+        async def stream():
+            emitted = 0
+            while True:
+                value = matcher.detail(match_id)
+                events = value.get("extraction_events", [])
+                for event in events[emitted:]:
+                    yield (
+                        f"id: {event['sequence']}\n"
+                        f"event: {event['phase']}\n"
+                        f"data: {json.dumps(event, sort_keys=True)}\n\n"
+                    )
+                    emitted += 1
+                if value.get("extraction_phase") in EXTRACTION_TERMINAL_PHASES:
+                    return
+                if await request.is_disconnected():
+                    return
+                await asyncio.sleep(0.1)
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
 
     @app.post("/api/changes/analyze", response_model=ChangeSummary)
     def analyze(request: AnalyzeRequest) -> dict[str, Any]:

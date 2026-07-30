@@ -20,4 +20,12 @@ describe("change routes", () => {
       planId: "RUN-real"
     });
   });
+
+  it("supports the Beat 0 landing and deep-link routes", () => {
+    expect(parseHash("/analyze")).toEqual({ name: "analyze" });
+    expect(parseHash("/analyze/MATCH-real")).toEqual({
+      name: "analysis",
+      matchId: "MATCH-real"
+    });
+  });
 });

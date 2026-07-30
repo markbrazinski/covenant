@@ -474,5 +474,28 @@ def test_gate6d_async_api_emits_commissioned_match_phases_in_order():
                 == "AWAITING_REVIEW"
             )
             assert len(extracted.json()["candidate"]["rules"]) == 4
+            extraction_stream = await client.get(
+                f"/analyses/{match_id}/extraction-events"
+            )
+            assert extraction_stream.status_code == 200
+            assert extraction_stream.headers["content-type"].startswith(
+                "text/event-stream"
+            )
+            detail = await client.get(f"/analyses/{match_id}")
+            assert [
+                item["phase"]
+                for item in detail.json()["extraction_events"]
+            ] == [
+                "PREPARING_SOURCES",
+                "EXTRACTING_BEDROCK",
+                "MODEL_OUTPUT_RECEIVED",
+                "VERIFYING_SCHEMA",
+                "VERIFYING_CITATIONS_AND_RULES",
+                "VERIFYING_CANDIDATE_CONSISTENCY",
+                "VERIFICATION_COMPLETED",
+                "CANDIDATE_READY",
+            ]
+            assert "event: EXTRACTING_BEDROCK" in extraction_stream.text
+            assert "event: CANDIDATE_READY" in extraction_stream.text
 
     anyio.run(exercise)

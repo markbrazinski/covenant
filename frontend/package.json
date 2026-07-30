@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "node scripts/browser-check.mjs"
+    "test:e2e": "node scripts/browser-check.mjs",
+    "test:e2e:beat0": "node scripts/beat0-browser-check.mjs",
+    "test:e2e:beat0-failures": "node scripts/beat0-failure-browser-check.mjs",
+    "test:e2e:beat0-responsive": "node scripts/beat0-responsive-browser-check.mjs"
   },
   "dependencies": {
     "react": "^18.2.0",
