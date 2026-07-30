@@ -79,11 +79,17 @@ def main() -> int:
             flush=True,
         )
     injection, injection_latency = run(
-        ROOT / "fixtures" / "gate6d" / "atlas_license_v4_match_injection.md",
+        ROOT
+        / "fixtures"
+        / "matching-qualification"
+        / "atlas_license_v4_match_injection.md",
         registry,
     )
     unknown, unknown_latency = run(
-        ROOT / "fixtures" / "gate6d" / "unknown_vendor_agreement.md",
+        ROOT
+        / "fixtures"
+        / "matching-qualification"
+        / "unknown_vendor_agreement.md",
         registry,
     )
     stable_variants = len({comparable(item) for item in canonical_results})

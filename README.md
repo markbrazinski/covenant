@@ -136,7 +136,6 @@ fixtures/                 synthetic agreements, graph seed, and adversarial case
 scripts/                  supported setup, demo, and qualification commands
 tests/                    backend tests
 examples/                 sanitized representative outputs and screenshots
-docs/design/beat0/        tracked design references
 ```
 
 `smoke-test/` contains ignored local run state and evidence. Production runtime code does not depend on it.
@@ -152,6 +151,12 @@ The [`examples/`](examples/) directory contains sanitized representative artifac
 - the reconciled native writeback/readback.
 
 See [`examples/README.md`](examples/README.md) for provenance and interpretation.
+
+The [`fixtures/README.md`](fixtures/README.md) separates runtime inputs,
+deterministic regression cases, and optional credentialed provider
+qualifications. Qualification cases are challenge inputs, not embedded expected
+answers. A qualification command exits successfully only when every selected
+required case passes.
 
 ## License
 

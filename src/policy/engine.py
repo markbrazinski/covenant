@@ -9,7 +9,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_policy(path: Path | None = None) -> dict[str, Any]:
-    path = path or ROOT / "fixtures" / "expected_policy_delta.json"
+    path = (
+        path
+        or ROOT
+        / "fixtures"
+        / "policies"
+        / "atlas-lic-004-v4-active.json"
+    )
     return json.loads(path.read_text())
 
 
