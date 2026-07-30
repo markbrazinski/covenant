@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Covenant match model semantic output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "extracted_vendor_name",
+    "extracted_obligation_id",
+    "vendor_source_evidence",
+    "obligation_source_evidence",
+    "tool_result_status",
+    "tool_result_match_json"
+  ],
+  "properties": {
+    "extracted_vendor_name": {"type": "string", "minLength": 1},
+    "extracted_obligation_id": {"type": "string", "minLength": 1},
+    "vendor_source_evidence": {"type": "string", "minLength": 1},
+    "obligation_source_evidence": {"type": "string", "minLength": 1},
+    "tool_result_status": {"enum": ["MATCH", "NOT_FOUND"]},
+    "tool_result_match_json": {
+      "type": "string",
+      "description": "Exact compact JSON for the tool's match field, or the literal null."
+    }
+  }
+}

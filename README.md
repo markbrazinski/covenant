@@ -56,6 +56,28 @@ terminal, run the canonical activation, impact, writeback, and replay proof:
 The API persists local orchestration state only under ignored `smoke-test/`.
 DataHub remains authoritative for graph membership and native decision receipts.
 
+Gate 6D adds a DataHub-native governed-agreement registry and a Bedrock
+tool-use match boundary. `start_covenant.sh` idempotently registers the
+synthetic Atlas Signals v3 agreement as a native DataHub Domain. Verify the
+registry without invoking a model:
+
+```bash
+curl http://127.0.0.1:8000/agreements/registered
+```
+
+Start a real asynchronous match against the canonical incoming v4 fixture:
+
+```bash
+curl -X POST \
+  -F fixture_path=fixtures/atlas_license_v4.md \
+  http://127.0.0.1:8000/analyses/match
+```
+
+The response contains a `match_id` and SSE `stream_url`. A verified match only
+identifies and retrieves the prior governed agreement; it does not activate a
+candidate. `POST /analyses/{match_id}/extract` separately invokes the existing
+Gate 6A extraction and Gate 6B deterministic verification path.
+
 The approved Gate 5 React integration lives in `frontend/` and uses the real API
 by default:
 
@@ -72,10 +94,11 @@ to the two loopback Vite origins through `COVENANT_CORS_ORIGINS`; production is
 intended to be same-origin. Fixture mode is explicit and never a runtime
 fallback.
 
-Ordinary `start_covenant.sh` invokes `scripts/ensure_fixture.py`: it reads the
-canonical governed source and seeds the representative native graph only when
-that source is absent. It preserves existing graph and decision state. The
-separate `run_verified_loop.sh` remains the intentional reset/reseed path.
+Ordinary `start_covenant.sh` invokes `scripts/ensure_fixture.py` and the
+idempotent agreement-registry seed: it reads the canonical governed source and
+seeds native DataHub records only when needed. It preserves existing graph and
+decision state. The separate `run_verified_loop.sh` remains the intentional
+reset/reseed path.
 
 This is deliberately a local replay path, not a hosted-access claim. Internal
 commissions, reports, and generated evidence remain local and ignored. No

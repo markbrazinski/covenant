@@ -18,9 +18,11 @@ class RunStore:
             "schema_version": "covenant.api_state.v1",
             "changes": {},
             "runs": {},
+            "analyses": {},
         }
         if path and path.exists():
             self._state = json.loads(path.read_text())
+            self._state.setdefault("analyses", {})
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -47,6 +49,16 @@ class RunStore:
     def put_run(self, run_id: str, value: dict[str, Any]) -> None:
         with self._lock:
             self._state["runs"][run_id] = deepcopy(value)
+            self._persist()
+
+    def get_analysis(self, match_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            value = self._state["analyses"].get(match_id)
+            return deepcopy(value) if value else None
+
+    def put_analysis(self, match_id: str, value: dict[str, Any]) -> None:
+        with self._lock:
+            self._state["analyses"][match_id] = deepcopy(value)
             self._persist()
 
     def _persist(self) -> None:

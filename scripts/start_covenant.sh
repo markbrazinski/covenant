@@ -19,6 +19,7 @@ api_host="${COVENANT_API_HOST:-127.0.0.1}"
 api_port="${COVENANT_API_PORT:-8000}"
 
 "$venv_dir/bin/python" scripts/ensure_fixture.py
+"$venv_dir/bin/python" scripts/seed_registry.py
 
 echo "Covenant API: http://${api_host}:${api_port}/docs"
 echo "React UI is started separately from frontend/ and binds to this API."
