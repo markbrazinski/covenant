@@ -4,8 +4,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-./scripts/bootstrap_runtime.sh
-
 if [[ -f .env ]]; then
   set -a
   # shellcheck disable=SC1091
@@ -13,10 +11,16 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+python_bin="${COVENANT_PYTHON:-python3.11}"
 venv_dir="${COVENANT_VENV:-.venv}"
 api_host="${COVENANT_API_HOST:-127.0.0.1}"
 api_port="${COVENANT_API_PORT:-8000}"
+
+"$python_bin" scripts/preflight_port.py "$api_host" "$api_port"
+
+./scripts/bootstrap_runtime.sh
+
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 "$venv_dir/bin/python" scripts/ensure_fixture.py
 "$venv_dir/bin/python" scripts/seed_registry.py

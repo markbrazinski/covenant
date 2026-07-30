@@ -5,7 +5,7 @@
   "description": "Covenant Record — locked Record visual system + layered causal graph integrated with the Gate 3 API.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
