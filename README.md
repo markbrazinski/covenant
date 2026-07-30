@@ -37,7 +37,9 @@ Covenant turns a changed data-use agreement into an evidence-bound, graph-derive
 - Docker Desktop, or a compatible Docker daemon, running with enough resources for DataHub Quickstart. This project was verified with 8 GB allocated to Docker.
 - Python 3.11 exactly.
 - Node.js `^20.19.0` or `>=22.12.0`, plus npm.
-- Internet access on first setup for Python/npm packages and Docker images.
+- Internet access for Python/npm packages, Docker images, and DataHub Quickstart
+  runtime checks. A later startup may still contact GitHub or a package/image
+  registry when an artifact or runtime definition is not cached.
 - An AWS credential accepted by the standard boto3 credential chain, or a bounded Bedrock development bearer token.
 - Amazon Bedrock access to a Converse-capable Claude model or inference profile, authorization to transmit the synthetic document, and approval for the associated provider requests and cost.
 - Free local ports `5173` (React), `8000` (API), `8080` (DataHub GMS), and `9002` (DataHub UI). Quickstart also binds supporting Docker services.
@@ -90,7 +92,9 @@ Inspect native metadata at [http://localhost:9002](http://localhost:9002). The o
 
 ### Verification
 
-With the API still running, the canonical HTTP replay exercises the already-created fixture change; it does **not** invoke the Beat 0 Bedrock upload:
+With the API still running, the canonical HTTP replay idempotently selects the
+canonical fixture change even when other analyses exist; it does **not** invoke
+the Beat 0 Bedrock upload:
 
 ```bash
 ./scripts/run_verified_demo.sh
@@ -118,8 +122,27 @@ That reset path is for verification, not ordinary startup. It writes synthetic p
 - If Docker is unavailable or Quickstart returns HTTP 500, restart Docker, wait for the daemon, and rerun `./scripts/start_covenant.sh`.
 - If DataHub is degraded or registry seeding times out, run `.venv/bin/datahub docker check`, then rerun the startup script.
 - If the API reports `MODEL_ID_REQUIRED`, set `COVENANT_BEDROCK_MODEL_ID`. For an invoke/access error, check the AWS region, credential chain or bearer token, inference-profile access, and `bedrock:InvokeModel` permission.
-- If a loopback port is occupied, keep `COVENANT_API_PORT`, root `COVENANT_API_URL`, frontend `VITE_COVENANT_API_URL`, and `COVENANT_CORS_ORIGINS` consistent. The repository scripts do not remap DataHub's Quickstart ports.
-- If the frontend cannot reach the API, check `/api/health` and use the configured `5173` loopback origin exactly.
+- If a loopback port is occupied, keep `COVENANT_API_PORT`, root
+  `COVENANT_API_URL`, frontend `VITE_COVENANT_API_URL`, and
+  `COVENANT_CORS_ORIGINS` consistent. For example, use this root `.env`
+  configuration for API port `8010` and frontend port `5180`:
+
+  ```dotenv
+  COVENANT_API_PORT=8010
+  COVENANT_API_URL=http://127.0.0.1:8010
+  COVENANT_CORS_ORIGINS=http://127.0.0.1:5180
+  ```
+
+  Then set the frontend's `frontend/.env` to:
+
+  ```dotenv
+  VITE_COVENANT_API_URL=http://127.0.0.1:8010
+  ```
+
+  Start the frontend with `npm run dev -- --port 5180`. The repository scripts
+  do not remap DataHub's Quickstart ports.
+- If the frontend cannot reach the API, check `/api/health` and use the
+  configured frontend loopback origin exactly.
 - Uploads must be text-bearing Markdown or PDF files between 1 byte and 5 MiB.
 - Stop the frontend and API with Ctrl-C in their terminals. From the repository root, stop Quickstart with `.venv/bin/datahub docker quickstart --stop`.
 

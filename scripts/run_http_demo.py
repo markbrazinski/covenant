@@ -19,13 +19,19 @@ def require(response: httpx.Response) -> dict:
     return response.json()
 
 
+def canonical_fixture_change(client: httpx.Client) -> dict:
+    return require(
+        client.post(
+            "/api/changes/analyze",
+            json={"fixture_id": "atlas_v3_v4"},
+        )
+    )
+
+
 if __name__ == "__main__":
     with httpx.Client(base_url=BASE_URL, timeout=120) as client:
         health = require(client.get("/api/health"))
-        changes = require(client.get("/api/changes"))
-        if len(changes) != 1:
-            raise SystemExit(f"expected one canonical change, found {len(changes)}")
-        change = changes[0]
+        change = canonical_fixture_change(client)
         activation = require(
             client.post(
                 f"/api/changes/{change['change_id']}/activate",
