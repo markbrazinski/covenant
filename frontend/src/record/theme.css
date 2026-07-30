@@ -78,7 +78,6 @@
 .analysis-shell {
   width: 1440px;
   min-height: 900px;
-  overflow: hidden;
   border: 1px solid var(--line-2);
   border-radius: 2px;
   background: var(--frame-bg);
@@ -235,6 +234,9 @@
 
 .analysis-activity-column {
   min-width: 0;
+  position: sticky;
+  top: 24px;
+  align-self: start;
 }
 
 .analysis-agent-panel {
@@ -638,6 +640,9 @@
   .analysis-workspace {
     padding: 24px 20px;
     grid-template-columns: 1fr;
+  }
+  .analysis-activity-column {
+    position: static;
   }
 }
 

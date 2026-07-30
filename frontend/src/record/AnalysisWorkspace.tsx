@@ -404,13 +404,14 @@ export function AnalysisWorkspace({
                 agreement &&
                 state.extractionEvents.length > 0
               )}
-              onContinue={() =>
+              onContinue={() => {
                 navigate(
                   changeId
                     ? `/changes/${encodeURIComponent(changeId)}`
                     : "/changes",
-                )
-              }
+                );
+                window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+              }}
             />
           </div>
         }

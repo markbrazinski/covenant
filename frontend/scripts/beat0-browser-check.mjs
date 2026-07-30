@@ -196,6 +196,28 @@ try {
     );
   }
 
+  const stickyPosition = await page.evaluate(async () => {
+    const maximum = document.documentElement.scrollHeight - innerHeight;
+    scrollTo(0, Math.min(300, Math.max(0, maximum / 2)));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const panel = document.querySelector(".analysis-activity-column");
+    return {
+      scrollY,
+      top: panel?.getBoundingClientRect().top ?? null,
+    };
+  });
+  if (
+    stickyPosition.scrollY > 56 &&
+    (stickyPosition.top === null ||
+      Math.abs(stickyPosition.top - 24) > 2)
+  ) {
+    throw new Error(
+      `Agent activity panel did not remain sticky: ${JSON.stringify(
+        stickyPosition,
+      )}`,
+    );
+  }
+
   await page
     .getByRole("button", { name: "Continue to review" })
     .click();
@@ -203,6 +225,12 @@ try {
   await page
     .getByRole("heading", { name: /Atlas Signals v3 → v4/ })
     .waitFor();
+  const reviewScrollY = await page.evaluate(() => scrollY);
+  if (reviewScrollY !== 0) {
+    throw new Error(
+      `Continue to review did not reset scroll: ${reviewScrollY}`,
+    );
+  }
 
   const reduced = await browser.newContext({
     viewport: { width: 1440, height: 900 },
