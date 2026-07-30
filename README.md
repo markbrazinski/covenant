@@ -1,89 +1,81 @@
 # Covenant
 
-Covenant is a bounded, deterministic proof that DataHub lineage and metadata can route a changed source-data obligation to affected native assets. The synthetic graph contains a DataHub Dashboard, two MLModels, a delivery DataFlow/DataJob, canonical datasets, and an unrelated control.
+Covenant turns a changed data-use agreement into an evidence-bound, graph-derived response plan: it recognizes the governed agreement, propagates the verified policy change through live DataHub lineage, and records inspectable proposal receipts on native DataHub assets.
 
-The expected result is exactly one allowed dashboard, two models requiring remediation, one proposed delivery stop, one human review, and one unaffected control. Humans retain approval authority; Covenant records recommendations and receipts but does not claim legal judgment, pipeline stoppage, or machine unlearning.
+![Covenant verifies a four-rule candidate extracted from the Atlas Signals v4 PDF](examples/screenshots/beat0-verified.png)
 
-The supported runtime is the official local DataHub Quickstart, pinned to Core
-v1.6.0. Bootstrap it on a clean machine with Docker and Python 3.11 available:
+![Covenant's completed impact plan shows five affected paths and one unaffected control](examples/screenshots/impact-plan.png)
+
+## How it works
+
+**Recognize.** An operator uploads the synthetic Atlas Signals v4 PDF at `/analyze`. Claude Sonnet 4.5, called through Amazon Bedrock Converse, identifies the vendor and obligation, makes one tool-use lookup against Covenant's DataHub-native governed-agreement registry, and extracts four cited candidate rules. A deterministic verifier then checks the schema, source hashes, byte-exact citations, ISO date, allowed vocabulary, version relationship, and evidence state. Only a passing candidate can enter `AWAITING_REVIEW`; a verified match or extraction is not activation.
+
+**Propagate and record.** An explicit **SYNTHETIC TEST APPROVAL** activates the fixture candidate. Live DataHub MCP calls discover the affected URNs and exact lineage paths; deterministic policy produces the canonical result of **1 allowed / 2 remediate / 1 stop proposed / 1 human review / 1 unaffected**. The DataHub SDK writes proposed-response metadata to the five affected native assets, and MCP plus SDK readbacks reconcile the receipts. Nothing is automatically stopped, approved, retrained, or enforced.
+
+## Technologies and dependencies
+
+- [DataHub](https://datahubproject.io/) Core Quickstart `v1.6.0` is the metadata graph, governed-agreement registry, native writeback surface, and local judge runtime.
+- `mcp-server-datahub==0.6.0` supplies live search, entity, downstream-membership, and exact-lineage-path evidence.
+- `acryl-datahub==1.6.0` performs native property/tag writes and detailed receipt readback; the pinned MCP server has no write tool.
+- Amazon Bedrock Converse runs the tested US Claude Sonnet 4.5 inference profile (`us.anthropic.claude-sonnet-4-5-20250929-v1:0`) for agreement matching and candidate extraction.
+- Python `>=3.11,<3.12`, JSON Schema `4.26.0`, and Covenant's deterministic verifier reject unsupported or malformed model output before review.
+- FastAPI `0.139.2` and Uvicorn `0.51.0` expose the orchestration boundary and progress streams.
+- React 18, TypeScript, and Vite 8 render the document-analysis, review, lineage, evidence, and receipt experience.
+- `pypdf==6.14.2` extracts text from the bounded PDF upload surface.
+
+## Demo
+
+- Demo video: **[add public YouTube or Vimeo URL]**
+- Devpost submission: **[add Devpost URL]**
+- Native DataHub writeback proof: [view the screenshot](examples/screenshots/datahub-writeback.png)
+
+## Run locally
+
+### Prerequisites
+
+- Git.
+- Docker Desktop, or a compatible Docker daemon, running with enough resources for DataHub Quickstart. This project was verified with 8 GB allocated to Docker.
+- Python 3.11 exactly.
+- Node.js `^20.19.0` or `>=22.12.0`, plus npm.
+- Internet access on first setup for Python/npm packages and Docker images.
+- An AWS credential accepted by the standard boto3 credential chain, or a bounded Bedrock development bearer token.
+- Amazon Bedrock access to a Converse-capable Claude model or inference profile, authorization to transmit the synthetic document, and approval for the associated provider requests and cost.
+- Free local ports `5173` (React), `8000` (API), `8080` (DataHub GMS), and `9002` (DataHub UI). Quickstart also binds supporting Docker services.
+
+Clone and create the ignored local environment file:
 
 ```bash
+git clone https://github.com/markbrazinski/covenant.git
+cd covenant
 cp .env.example .env
-./scripts/bootstrap_runtime.sh
-./scripts/run_verified_loop.sh
 ```
 
-The first command creates `.venv`, installs the pinned project and test
-dependencies, and starts DataHub. The second performs deterministic reset,
-live MCP-derived analysis, native writeback/readback, regressions, and final
-verification. Re-running it is the supported reset/replay path.
+Edit `.env` and keep it uncommitted. The tested hackathon path accepts `AWS_BEARER_TOKEN_BEDROCK`; standard boto3 environment credentials, profiles, sessions, or IAM roles also work. Set `AWS_REGION=us-east-1` and set `COVENANT_BEDROCK_MODEL_ID` to an inference profile you are authorized to invoke. The example value is the profile tested by this project, not a direct foundation-model ID.
 
-Gate 2 adds a bounded, literal change-to-action slice for the fictional Atlas
-Signals v3 and v4 documents. Extraction produces cited candidate rules but does
-not activate them. Inspect the candidate-only result with:
+Uploads are sent to Amazon Bedrock and incur provider requests. Never put a real credential in `.env.example`, a fixture, an issue, or a commit.
+
+In terminal 1, bootstrap DataHub, seed the synthetic graph and governed-agreement registry idempotently, and start the API:
 
 ```bash
-PYTHONPATH=. .venv/bin/python scripts/run_change_to_action.py
-```
-
-Run the explicit test activation and live DataHub loop with:
-
-```bash
-PYTHONPATH=. .venv/bin/python scripts/run_change_to_action.py --synthetic-approve
-```
-
-The second command records only a **SYNTHETIC TEST APPROVAL**. It does not claim
-real legal or governance approval. Covenant turns a reviewed source-data
-obligation change into a graph-derived operational response plan; it does not
-determine legal compliance or perform enforcement.
-
-Gate 3 exposes the same reviewed change-to-action loop through a local FastAPI
-boundary. Start the pinned DataHub runtime and API without resetting an existing
-graph:
-
-```bash
-cp .env.example .env
 ./scripts/start_covenant.sh
 ```
 
-The API documentation is available at `http://127.0.0.1:8000/docs`. In another
-terminal, run the canonical activation, impact, writeback, and replay proof:
+On first use this creates `.venv`, installs the pinned Python project and test dependencies, starts/checks DataHub Quickstart `v1.6.0`, seeds only missing Covenant fixture records, and then keeps Uvicorn in the foreground. Successful startup reports the DataHub runtime, registry seed state, and:
 
-```bash
-./scripts/run_verified_demo.sh
+```text
+Covenant API: http://127.0.0.1:8000/docs
 ```
 
-The API persists local orchestration state only under ignored `smoke-test/`.
-DataHub remains authoritative for graph membership and native decision receipts.
-
-Gate 6D adds a DataHub-native governed-agreement registry and a Bedrock
-tool-use match boundary. `start_covenant.sh` idempotently registers the
-synthetic Atlas Signals v3 agreement as a native DataHub Domain. Verify the
-registry without invoking a model:
+In terminal 2, verify the API and DataHub-native registry:
 
 ```bash
-curl http://127.0.0.1:8000/agreements/registered
+curl -fsS http://127.0.0.1:8000/api/health
+curl -fsS http://127.0.0.1:8000/api/agreements/registered
 ```
 
-Start a real asynchronous match against the canonical incoming v4 fixture:
+Health should report `status: ok` and `datahub: connected`. The registry response should contain the synthetic Atlas Signals `ATLAS-LIC-004` record.
 
-```bash
-curl -X POST \
-  -F fixture_path=fixtures/atlas_license_v4.pdf \
-  http://127.0.0.1:8000/analyses/match
-```
-
-The PDF is the operator-facing upload fixture. The adjacent Markdown file is
-retained as the canonical text source for deterministic qualification and
-historical hash evidence.
-
-The response contains a `match_id` and SSE `stream_url`. A verified match only
-identifies and retrieves the prior governed agreement; it does not activate a
-candidate. `POST /analyses/{match_id}/extract` separately invokes the existing
-Gate 6A extraction and Gate 6B deterministic verification path.
-
-The approved Gate 5 React integration lives in `frontend/` and uses the real API
-by default:
+In terminal 3, install and start the frontend:
 
 ```bash
 cd frontend
@@ -92,18 +84,83 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173/changes`. When the API uses another port, set
-`VITE_COVENANT_API_URL` in `frontend/.env`. Development CORS is narrowly limited
-to the two loopback Vite origins through `COVENANT_CORS_ORIGINS`; production is
-intended to be same-origin. Fixture mode is explicit and never a runtime
-fallback.
+Open [http://127.0.0.1:5173/analyze](http://127.0.0.1:5173/analyze), upload `fixtures/atlas_license_v4.pdf`, and continue through match, extraction, deterministic verification, review, synthetic activation, impact, and record. A normal first model-backed match took roughly 9–11 seconds during qualification, with a measured provider outlier of 25.8 seconds.
 
-Ordinary `start_covenant.sh` invokes `scripts/ensure_fixture.py` and the
-idempotent agreement-registry seed: it reads the canonical governed source and
-seeds native DataHub records only when needed. It preserves existing graph and
-decision state. The separate `run_verified_loop.sh` remains the intentional
-reset/reseed path.
+Inspect native metadata at [http://localhost:9002](http://localhost:9002). The official local Quickstart's default development login is `datahub` / `datahub`; do not reuse it outside this local synthetic runtime. API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
-This is deliberately a local replay path, not a hosted-access claim. Internal
-commissions, reports, and generated evidence remain local and ignored. No
-public service or external action integration is included.
+### Verification
+
+With the API still running, the canonical HTTP replay exercises the already-created fixture change; it does **not** invoke the Beat 0 Bedrock upload:
+
+```bash
+./scripts/run_verified_demo.sh
+```
+
+Run the backend and frontend suites:
+
+```bash
+.venv/bin/pytest -q
+cd frontend
+npm test
+npm run build
+```
+
+For an intentional destructive reset/reseed of Covenant-owned synthetic fixture aspects followed by the full deterministic proof, return to the repository root and run:
+
+```bash
+./scripts/run_verified_loop.sh
+```
+
+That reset path is for verification, not ordinary startup. It writes synthetic proposal receipts.
+
+### Troubleshooting and shutdown
+
+- If Docker is unavailable or Quickstart returns HTTP 500, restart Docker, wait for the daemon, and rerun `./scripts/start_covenant.sh`.
+- If DataHub is degraded or registry seeding times out, run `.venv/bin/datahub docker check`, then rerun the startup script.
+- If the API reports `MODEL_ID_REQUIRED`, set `COVENANT_BEDROCK_MODEL_ID`. For an invoke/access error, check the AWS region, credential chain or bearer token, inference-profile access, and `bedrock:InvokeModel` permission.
+- If a loopback port is occupied, keep `COVENANT_API_PORT`, root `COVENANT_API_URL`, frontend `VITE_COVENANT_API_URL`, and `COVENANT_CORS_ORIGINS` consistent. The repository scripts do not remap DataHub's Quickstart ports.
+- If the frontend cannot reach the API, check `/api/health` and use the configured `5173` loopback origin exactly.
+- Uploads must be text-bearing Markdown or PDF files between 1 byte and 5 MiB.
+- Stop the frontend and API with Ctrl-C in their terminals. From the repository root, stop Quickstart with `.venv/bin/datahub docker quickstart --stop`.
+
+## Repository structure
+
+```text
+covenant/                 Bedrock matching/extraction and deterministic verification
+src/api/                  FastAPI orchestration, state, and progress streams
+src/datahub_client/       DataHub MCP discovery plus SDK write/readback boundary
+src/policy/               deterministic disposition policy
+src/reconciler/           native writeback/readback reconciliation
+frontend/                 React analysis and impact-plan demo
+fixtures/                 synthetic agreements, graph seed, and adversarial cases
+scripts/                  supported setup, demo, and qualification commands
+tests/                    backend tests
+examples/                 sanitized representative outputs and screenshots
+docs/design/beat0/        tracked design references
+```
+
+`smoke-test/` contains ignored local run state and evidence. Production runtime code does not depend on it.
+
+## Sample outputs
+
+The [`examples/`](examples/) directory contains sanitized representative artifacts for:
+
+- the model-extracted candidate delta;
+- the deterministic verification result;
+- the DataHub-native agreement match;
+- the graph-derived impact plan; and
+- the reconciled native writeback/readback.
+
+See [`examples/README.md`](examples/README.md) for provenance and interpretation.
+
+## License
+
+Apache-2.0. See [`LICENSE`](LICENSE).
+
+## Honest boundaries
+
+Covenant is a reproducible local demo over fictional Atlas Signals and Northstar Commerce data. It is not a hosted service and does not include production authentication, tenancy, or external-action integrations.
+
+The model proposes structured matching and extraction; its output is untrusted until deterministic verification passes. DataHub remains authoritative for affected-set membership, exact graph paths, and native receipts. If MCP or DataHub is unavailable, Covenant must not present a fabricated affected set.
+
+Covenant does not make legal determinations, grant real approval, stop pipelines, retrain models, perform machine unlearning, or enforce policy. `STOP_PROPOSED` is a human-authorized action proposal, and **SYNTHETIC TEST APPROVAL** is fixture-only behavior.

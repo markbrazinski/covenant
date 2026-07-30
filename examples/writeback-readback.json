@@ -1,0 +1,86 @@
+{
+  "mode": "write",
+  "proposed": 5,
+  "written": 5,
+  "verified": true,
+  "readback": {
+    "count": 5,
+    "read_interfaces": {
+      "detailed_receipt": "DataHub SDK native property-aspect read",
+      "native_state": "DataHub MCP get_entities tags"
+    },
+    "states": [
+      {
+        "asset_urn": "urn:li:dashboard:(covenant,northstar.executive_dashboard)",
+        "entity_type": "dashboard",
+        "covenant.decision.id": "COV-ATLAS-LIC-004-v4-4a4d23f6c7f3066b",
+        "covenant.decision.obligation_id": "ATLAS-LIC-004",
+        "covenant.decision.actor_class": "agent_system_recommendation",
+        "covenant.decision.disposition": "allowed",
+        "covenant.decision.state": "recommendation_recorded",
+        "covenant.decision.owner": "urn:li:corpGroup:northstar_analytics",
+        "covenant.decision.proposed_action": "retain use and preserve evidence receipt",
+        "covenant.decision.evidence_reference": "examples/impact-plan.json",
+        "mcp_tags_verified": true,
+        "sdk_receipt_verified": true
+      },
+      {
+        "asset_urn": "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.churn_model_a,DEV)",
+        "entity_type": "mlModel",
+        "covenant.decision.id": "COV-ATLAS-LIC-004-v4-3f3f70789717e6b7",
+        "covenant.decision.obligation_id": "ATLAS-LIC-004",
+        "covenant.decision.actor_class": "agent_system_recommendation",
+        "covenant.decision.disposition": "remediate",
+        "covenant.decision.state": "awaiting_human_approval",
+        "covenant.decision.owner": "urn:li:corpGroup:northstar_model_ops",
+        "covenant.decision.proposed_action": "owner decision: clean rebuild, retrain, or deprecate",
+        "covenant.decision.evidence_reference": "examples/impact-plan.json",
+        "mcp_tags_verified": true,
+        "sdk_receipt_verified": true
+      },
+      {
+        "asset_urn": "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.propensity_model_b,DEV)",
+        "entity_type": "mlModel",
+        "covenant.decision.id": "COV-ATLAS-LIC-004-v4-fb34f473668b6df0",
+        "covenant.decision.obligation_id": "ATLAS-LIC-004",
+        "covenant.decision.actor_class": "agent_system_recommendation",
+        "covenant.decision.disposition": "remediate",
+        "covenant.decision.state": "awaiting_human_approval",
+        "covenant.decision.owner": "urn:li:corpGroup:northstar_model_ops",
+        "covenant.decision.proposed_action": "owner decision: clean rebuild, retrain, or deprecate",
+        "covenant.decision.evidence_reference": "examples/impact-plan.json",
+        "mcp_tags_verified": true,
+        "sdk_receipt_verified": true
+      },
+      {
+        "asset_urn": "urn:li:dataJob:(urn:li:dataFlow:(covenant,northstar.customer_delivery_flow,DEV),northstar.customer_delivery_job)",
+        "entity_type": "dataJob",
+        "covenant.decision.id": "COV-ATLAS-LIC-004-v4-b0653126cfdd3a17",
+        "covenant.decision.obligation_id": "ATLAS-LIC-004",
+        "covenant.decision.actor_class": "agent_system_recommendation",
+        "covenant.decision.disposition": "stop_proposed",
+        "covenant.decision.state": "awaiting_human_approval",
+        "covenant.decision.owner": "urn:li:corpGroup:northstar_customer_product",
+        "covenant.decision.proposed_action": "human-authorized stop of synthetic redistribution workflow",
+        "covenant.decision.evidence_reference": "examples/impact-plan.json",
+        "mcp_tags_verified": true,
+        "sdk_receipt_verified": true
+      },
+      {
+        "asset_urn": "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.anonymized_segment_derivative,DEV)",
+        "entity_type": "dataset",
+        "covenant.decision.id": "COV-ATLAS-LIC-004-v4-ef86d01e87993f84",
+        "covenant.decision.obligation_id": "ATLAS-LIC-004",
+        "covenant.decision.actor_class": "agent_system_recommendation",
+        "covenant.decision.disposition": "human_review",
+        "covenant.decision.state": "awaiting_human_review",
+        "covenant.decision.owner": "urn:li:corpGroup:northstar_governance",
+        "covenant.decision.proposed_action": "governance review of preexisting anonymized derivative",
+        "covenant.decision.evidence_reference": "examples/impact-plan.json",
+        "mcp_tags_verified": true,
+        "sdk_receipt_verified": true
+      }
+    ],
+    "verified": true
+  }
+}

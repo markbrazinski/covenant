@@ -27,8 +27,9 @@ or expected-output list.
 
 ## Authority and evidence
 
-- The supported extractor is a bounded deterministic parser for fictional
-  versioned clauses. Do not claim broad legal or contract interpretation.
+- The supported model path is bounded Bedrock/Claude matching and extraction for
+  fictional versioned clauses, followed by deterministic verification. Do not
+  claim broad legal or contract interpretation.
 - Candidate evidence must validate before review.
 - Review and activation are distinct.
 - Automated activation must use the literal **SYNTHETIC TEST APPROVAL** label
@@ -43,12 +44,13 @@ or expected-output list.
 
 ## Current project state
 
-- Gate 3 is implemented at `d16ce34`.
-- The last complete suite recorded 39 tests with zero failures.
-- Gate 4 is closed with `DEFER`; no approved model runtime exists.
-- Gate 5 web experience is planned but not authorized by these instructions.
-- Do not begin a frontend, reopen model work, or start a later gate without an
-  explicit owner instruction naming that scope.
+- Gates through 6D are merged on `main`.
+- The React browser experience, Bedrock/Claude matching and extraction,
+  deterministic verifier, DataHub-native agreement registry, MCP-derived impact
+  plan, and native writeback/readback are implemented.
+- Gate 7 is limited to submission documentation and sanitized evidence. Do not
+  change production code, dependencies, or repository structure beyond its
+  explicit commission.
 
 When the local ignored documentation is present, read it before newly authorized
 gate work:
@@ -90,10 +92,18 @@ The default API documentation is available at:
 http://127.0.0.1:8000/docs
 ```
 
+Start the React frontend separately and open the judge flow at:
+
+```text
+http://127.0.0.1:5173/analyze
+```
+
 Do not silently substitute one operator path for another:
 
 - `run_verified_loop.sh` intentionally resets and reseeds;
 - `start_covenant.sh` preserves existing graph state and seeds only if absent.
+- `run_verified_demo.sh` replays the existing canonical change and does not run
+  the Bedrock upload/match/extraction flow.
 
 ## Repository and privacy rules
 
@@ -102,7 +112,9 @@ Do not silently substitute one operator path for another:
   clean.
 - Never commit `.env`, credentials, tokens, private endpoints, machine
   identifiers, raw exports, real customer data, or unsanitized evidence.
-- `docs/` and `smoke-test/` remain ignored, local, and owner-only.
+- Gate reports, handoffs, commissions, and `smoke-test/` remain ignored, local,
+  and owner-only. Tracked design references and sanitized `examples/` assets are
+  explicit public exceptions.
 - Tracked runtime code must not depend on ignored files.
 - Sanitize generated logs, JUnit XML, screenshots, and recordings before
   preservation or staging.
@@ -113,8 +125,8 @@ Do not silently substitute one operator path for another:
 
 Unless the current owner commission expressly authorizes it, do not add:
 
-- a frontend;
-- a model provider or local model download;
+- new frontend product scope;
+- another model provider or local model download;
 - hosting;
 - authentication or tenancy;
 - Slack, Jira, email, or ticketing;

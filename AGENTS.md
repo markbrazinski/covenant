@@ -8,11 +8,13 @@ The canonical result is exactly **1 allowed / 2 remediate / 1 stop proposed / 1 
 
 The supported runtime is the official local DataHub Quickstart pinned to v1.6.0. It is a reproducible local judge path, not a hosted-access or production-readiness claim. Bootstrap and replay must use the committed scripts and remain idempotent.
 
-Gate 2's supported extraction surface is deliberately bounded to literal,
-versioned synthetic clauses. Candidate evidence must validate before review,
-activation must be a separate event, and automated activation must use the
-literal **SYNTHETIC TEST APPROVAL** label. Active candidate rules may supply
-policy semantics, but live MCP remains the only affected-set and path source.
+The supported extraction surface is deliberately bounded to versioned synthetic
+clauses. Bedrock/Claude may propose agreement matches and cited candidate rules,
+but deterministic verification controls evidence eligibility. Candidate
+evidence must validate before review, activation must be a separate event, and
+automated activation must use the literal **SYNTHETIC TEST APPROVAL** label.
+Active candidate rules may supply policy semantics, but live MCP remains the
+only affected-set and path source.
 
 Gate 3's API is an orchestration boundary over those verified semantics. It must
 keep candidate analysis, activation, MCP impact, and native writeback as distinct
@@ -24,15 +26,16 @@ Humans retain legal and governance authority. System recommendations and real hu
 
 ## Current gate state
 
-- Gate 3 is complete at commit `d16ce34`; the last full verification recorded
-  39 tests with zero failures.
-- Gate 4 model-proposal evaluation is closed with `DEFER`. No approved model
-  credential or local model runtime exists, and no model-backed capability may
-  be claimed.
-- Gate 5, the web experience, is the next planned product gate but is not
-  authorized by this file. Begin it only after an explicit owner instruction.
-- Reopening Gate 4 requires explicit provider/model, credential source,
-  document-transmission permission, and cost/request or local-download approval.
+- Gates through 6D are merged on `main`; the React experience, Bedrock-backed
+  matching/extraction, deterministic verification, DataHub-native registry, live
+  MCP impact analysis, and SDK write/readback path are implemented.
+- The tested provider path is Amazon Bedrock Converse with the configured Claude
+  Sonnet 4.5 inference profile. Model access, credential source, synthetic
+  document-transmission permission, and request cost remain operator
+  responsibilities.
+- Gate 7 is documentation and submission-evidence cleanup only. It does not
+  authorize production-code changes, dependency changes, new features, or
+  deletion of ambiguous files.
 - When the local ignored documentation is present, read
   `docs/Covenant_Handoff_2026-07-23.md` and the current gate report before
   beginning a newly authorized gate.
@@ -63,11 +66,16 @@ For the Gate 3 API without silently resetting an existing graph:
 `start_covenant.sh` preserves an existing graph and seeds only when the canonical
 source is absent. Do not blur these behaviors.
 
+The judge-facing browser flow starts at `http://127.0.0.1:5173/analyze`.
+`run_verified_demo.sh` exercises the existing canonical change and does not
+invoke the Bedrock document-upload flow.
+
 ## Scope and safety
 
-- Unless a current explicit commission authorizes it, do not build a frontend,
-  model integration, hosted service, Slack or Jira integration, broad contract
-  parser, production integration, or machine-unlearning feature or claim.
+- Unless a current explicit commission authorizes it, do not expand the existing
+  frontend or model integration, or add a hosted service, Slack or Jira
+  integration, broad contract parser, production integration, or
+  machine-unlearning feature or claim.
 - Even when a frontend is authorized, bind it to the real Gate 3 API; do not
   hardcode expected terminals, paths, dispositions, receipts, or success states.
 - Treat existing tracked and untracked changes as user work. Preserve unrelated
@@ -80,7 +88,9 @@ source is absent. Do not blur these behaviors.
 - Do not publish, create a remote, or begin a later gate without explicit owner approval.
 
 Gate commissions, reports, and handoffs remain local under ignored `docs/`;
-generated evidence and API run state remain under ignored `smoke-test/`. Tracked
-runtime code must not depend on either ignored directory. Any contradiction
-between implementation convenience and the current commission resolves in favor
-of truth, privacy, human authority, and the acceptance criteria.
+raw generated evidence and API run state remain under ignored `smoke-test/`.
+The only public evidence exception is deliberately curated, visually inspected,
+and sanitized content under `examples/`. Tracked runtime code must not depend on
+any ignored directory. Any contradiction between implementation convenience and
+the current commission resolves in favor of truth, privacy, human authority, and
+the acceptance criteria.

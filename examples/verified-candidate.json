@@ -1,0 +1,100 @@
+{
+  "change_id": "CHANGE-38f8d63c7f74a5bb94d9",
+  "candidate_hash": "ff6bb99b918b416e48f1db20d16968202f21103f826240d5a3d3f41fa77c1ba2",
+  "provider_name": "Atlas Signals",
+  "candidate": {
+    "candidate_delta_id": "DELTA-38f8d63c7f74a5bb94d9",
+    "candidate_version": 4,
+    "effective_at": "2026-08-01",
+    "evidence_status": "SUPPORTED",
+    "lifecycle_state": "AWAITING_REVIEW",
+    "material_change": true,
+    "obligation_id": "ATLAS-LIC-004",
+    "rules": [
+      {
+        "rule_id": "ATLAS-LIC-004-v4-r1",
+        "usage_class": "internal_analytics",
+        "effect": "permitted",
+        "confidence": 0.95,
+        "evidence_status": "SUPPORTED",
+        "citation": {
+          "quote": "Internal analytics remains allowed.",
+          "source_ref": "analysis-upload:Atlas_Signals_License_ATLAS-LIC-004_v4.pdf",
+          "source_sha256": "d82af33463854f8d2681bcd9eec9cca9d9bed6a4e01703b54d7a674323d0ffa5"
+        }
+      },
+      {
+        "rule_id": "ATLAS-LIC-004-v4-r2",
+        "usage_class": "ml_training",
+        "effect": "prohibited",
+        "confidence": 0.95,
+        "evidence_status": "SUPPORTED",
+        "citation": {
+          "quote": "Machine-learning training is prohibited.",
+          "source_ref": "analysis-upload:Atlas_Signals_License_ATLAS-LIC-004_v4.pdf",
+          "source_sha256": "d82af33463854f8d2681bcd9eec9cca9d9bed6a4e01703b54d7a674323d0ffa5"
+        }
+      },
+      {
+        "rule_id": "ATLAS-LIC-004-v4-r3",
+        "usage_class": "customer_redistribution",
+        "effect": "prohibited",
+        "confidence": 0.95,
+        "evidence_status": "SUPPORTED",
+        "citation": {
+          "quote": "Customer redistribution is prohibited.",
+          "source_ref": "analysis-upload:Atlas_Signals_License_ATLAS-LIC-004_v4.pdf",
+          "source_sha256": "d82af33463854f8d2681bcd9eec9cca9d9bed6a4e01703b54d7a674323d0ffa5"
+        }
+      },
+      {
+        "rule_id": "ATLAS-LIC-004-v4-r4",
+        "usage_class": "anonymized_derivative",
+        "effect": "review_required",
+        "confidence": 0.9,
+        "evidence_status": "SUPPORTED",
+        "citation": {
+          "quote": "Previously created anonymized derivatives require human review.",
+          "source_ref": "analysis-upload:Atlas_Signals_License_ATLAS-LIC-004_v4.pdf",
+          "source_sha256": "d82af33463854f8d2681bcd9eec9cca9d9bed6a4e01703b54d7a674323d0ffa5"
+        }
+      }
+    ],
+    "schema_version": "covenant.candidate_delta.v1",
+    "supersedes_version": 3,
+    "unresolved_gaps": [],
+    "verification": {
+      "status": "PASS"
+    }
+  },
+  "document_hashes": {
+    "analysis-upload:Atlas_Signals_License_ATLAS-LIC-004_v4.pdf": "d82af33463854f8d2681bcd9eec9cca9d9bed6a4e01703b54d7a674323d0ffa5",
+    "fixtures/atlas_license_v3.md": "511fb8b69bb5a01031d0290fcadb3036a17b08030014289fafd4f69e4005167d"
+  },
+  "validation": {
+    "candidate_delta_id": "DELTA-38f8d63c7f74a5bb94d9",
+    "errors": [],
+    "valid": true
+  },
+  "verification": {
+    "status": "PASS"
+  },
+  "persisted": true,
+  "transitions": [
+    {
+      "actor_class": "agent_system_submission",
+      "candidate_delta_id": "DELTA-38f8d63c7f74a5bb94d9",
+      "new_state": "AWAITING_REVIEW",
+      "prior_state": "CANDIDATE",
+      "rationale": "evidence-bound candidate passed deterministic validation",
+      "transition_id": "TRANSITION-c49bae38c8d482b1919a"
+    }
+  ],
+  "extraction_receipt": {
+    "model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "prompt_version": "candidate-delta-v1.0.0",
+    "provider": "bedrock",
+    "schema_version": "covenant.candidate_delta.v1",
+    "status": "EXTRACTED_UNVERIFIED"
+  }
+}

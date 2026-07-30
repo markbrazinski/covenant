@@ -1,0 +1,121 @@
+{
+  "scenario": "SYNTHETIC Northstar Commerce / Atlas Signals",
+  "source": {
+    "active_version": 4,
+    "obligation_id": "ATLAS-LIC-004",
+    "resolved_via": "DataHub MCP search plus exact URN and obligation metadata validation",
+    "urn": "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)"
+  },
+  "counts": {
+    "allowed": 1,
+    "human_review": 1,
+    "remediate": 2,
+    "stop_proposed": 1,
+    "unaffected": 1
+  },
+  "decisions": [
+    {
+      "asset_name": "Internal Executive Dashboard",
+      "asset_urn": "urn:li:dashboard:(covenant,northstar.executive_dashboard)",
+      "entity_type": "dashboard",
+      "usage_class": "internal_analytics",
+      "controlling_policy_rule": "v4.internal_analytics.allowed",
+      "proposed_disposition": "allowed",
+      "decision_state": "recommendation_recorded",
+      "decision_owner": "urn:li:corpGroup:northstar_analytics",
+      "lineage_paths": [
+        [
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)",
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.executive_metrics,DEV)",
+          "urn:li:dashboard:(covenant,northstar.executive_dashboard)"
+        ]
+      ],
+      "evidence_reference": "examples/impact-plan.json"
+    },
+    {
+      "asset_name": "Churn Model A",
+      "asset_urn": "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.churn_model_a,DEV)",
+      "entity_type": "mlModel",
+      "usage_class": "ml_training",
+      "controlling_policy_rule": "v4.ml_training.prohibited_rebuild_or_deprecate",
+      "proposed_disposition": "remediate",
+      "decision_state": "awaiting_human_approval",
+      "decision_owner": "urn:li:corpGroup:northstar_model_ops",
+      "lineage_paths": [
+        [
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)",
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.training_features_a,DEV)",
+          "urn:li:dataProcessInstance:northstar.train_churn_model_a",
+          "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.churn_model_a,DEV)"
+        ]
+      ],
+      "evidence_reference": "examples/impact-plan.json"
+    },
+    {
+      "asset_name": "Propensity Model B",
+      "asset_urn": "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.propensity_model_b,DEV)",
+      "entity_type": "mlModel",
+      "usage_class": "ml_training",
+      "controlling_policy_rule": "v4.ml_training.prohibited_rebuild_or_deprecate",
+      "proposed_disposition": "remediate",
+      "decision_state": "awaiting_human_approval",
+      "decision_owner": "urn:li:corpGroup:northstar_model_ops",
+      "lineage_paths": [
+        [
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)",
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.training_features_b,DEV)",
+          "urn:li:dataProcessInstance:northstar.train_propensity_model_b",
+          "urn:li:mlModel:(urn:li:dataPlatform:covenant,northstar.propensity_model_b,DEV)"
+        ]
+      ],
+      "evidence_reference": "examples/impact-plan.json"
+    },
+    {
+      "asset_name": "Customer Delivery Job",
+      "asset_urn": "urn:li:dataJob:(urn:li:dataFlow:(covenant,northstar.customer_delivery_flow,DEV),northstar.customer_delivery_job)",
+      "entity_type": "dataJob",
+      "usage_class": "customer_redistribution",
+      "controlling_policy_rule": "v4.customer_redistribution.prohibited",
+      "proposed_disposition": "stop_proposed",
+      "decision_state": "awaiting_human_approval",
+      "decision_owner": "urn:li:corpGroup:northstar_customer_product",
+      "lineage_paths": [
+        [
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)",
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.customer_export,DEV)",
+          "urn:li:dataJob:(urn:li:dataFlow:(covenant,northstar.customer_delivery_flow,DEV),northstar.customer_delivery_job)"
+        ]
+      ],
+      "evidence_reference": "examples/impact-plan.json"
+    },
+    {
+      "asset_name": "Anonymized Segment Derivative",
+      "asset_urn": "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.anonymized_segment_derivative,DEV)",
+      "entity_type": "dataset",
+      "usage_class": "anonymized_derivative",
+      "controlling_policy_rule": "v4.preexisting_anonymized_derivative.review",
+      "proposed_disposition": "human_review",
+      "decision_state": "awaiting_human_review",
+      "decision_owner": "urn:li:corpGroup:northstar_governance",
+      "lineage_paths": [
+        [
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.vendor_demographics_raw,DEV)",
+          "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.anonymized_segment_derivative,DEV)"
+        ]
+      ],
+      "evidence_reference": "examples/impact-plan.json"
+    }
+  ],
+  "metadata_interfaces": {
+    "lineage": "DataHub MCP get_lineage_paths_between",
+    "ownership": "DataHub MCP get_entities",
+    "usage_and_terminal": "DataHub SDK native property-aspect read"
+  },
+  "unaffected": [
+    {
+      "asset_name": "Unrelated Control Asset",
+      "asset_urn": "urn:li:dataset:(urn:li:dataPlatform:covenant,northstar.unrelated_control,DEV)",
+      "reason": "absent from DataHub MCP downstream lineage result"
+    }
+  ]
+}
