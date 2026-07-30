@@ -69,9 +69,13 @@ Start a real asynchronous match against the canonical incoming v4 fixture:
 
 ```bash
 curl -X POST \
-  -F fixture_path=fixtures/atlas_license_v4.md \
+  -F fixture_path=fixtures/atlas_license_v4.pdf \
   http://127.0.0.1:8000/analyses/match
 ```
+
+The PDF is the operator-facing upload fixture. The adjacent Markdown file is
+retained as the canonical text source for deterministic qualification and
+historical hash evidence.
 
 The response contains a `match_id` and SSE `stream_url`. A verified match only
 identifies and retrieves the prior governed agreement; it does not activate a
