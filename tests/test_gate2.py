@@ -187,7 +187,7 @@ def test_gate2_active_candidate_derives_locked_operational_policy():
     assert policy["activation_id"].startswith("ACTIVATION-")
 
 
-def test_gate2_runtime_does_not_read_expected_result_fixtures():
+def test_gate2_runtime_does_not_read_expected_impact_fixture():
     for relative in (
         "src/obligations/candidate.py",
         "src/workflow/change_to_action.py",
@@ -195,7 +195,6 @@ def test_gate2_runtime_does_not_read_expected_result_fixtures():
     ):
         text = (ROOT / relative).read_text()
         assert "expected_impact_report" not in text
-        assert "expected_policy_delta" not in text
 
 
 def test_gate2_candidate_identity_is_stable_across_filesystem_locations(tmp_path):

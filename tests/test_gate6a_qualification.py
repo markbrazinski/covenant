@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from scripts.run_gate6a_qualification import (
     evaluate_ambiguous,
+    evaluate_citation_challenge,
     evaluate_exact_four,
     evaluate_injection,
     general_failures,
@@ -107,3 +108,26 @@ def test_qualification_ambiguous_requires_supported_review_or_gap():
     passed, failures = evaluate_ambiguous(candidate, SOURCE)
     assert not passed
     assert any("neither review nor a gap" in item for item in failures)
+
+
+def test_qualification_citation_challenge_accepts_safe_abstention():
+    candidate = {
+        "rules": [],
+        "unresolved_gaps": ["referenced schedule is unavailable"],
+        "evidence_status": "GAPS_PRESENT",
+        "lifecycle_state": "CANDIDATE",
+    }
+    passed, failures = evaluate_citation_challenge(candidate, SOURCE)
+    assert passed
+    assert failures == []
+
+
+def test_qualification_citation_challenge_rejects_invented_rule():
+    candidate = canonical_candidate()
+    candidate["unresolved_gaps"] = []
+    passed, failures = evaluate_citation_challenge(candidate, SOURCE)
+    assert not passed
+    assert any(
+        "citation-insufficient source produced a supported policy rule" in item
+        for item in failures
+    )

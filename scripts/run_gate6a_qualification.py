@@ -17,7 +17,7 @@ from covenant.extraction.bedrock import PROMPT_PATH
 ROOT = Path(__file__).resolve().parents[1]
 PRIOR = ROOT / "fixtures" / "atlas_license_v3.md"
 CANONICAL = ROOT / "fixtures" / "atlas_license_v4.md"
-QUALIFICATION = ROOT / "fixtures" / "gate6a"
+QUALIFICATION = ROOT / "fixtures" / "extraction-qualification"
 EXPECTED_FOUR = {
     "anonymized_derivative": "review_required",
     "customer_redistribution": "prohibited",
@@ -204,8 +204,21 @@ def evaluate_citation_challenge(
     candidate: dict, source: str
 ) -> tuple[bool, list[str]]:
     failures = general_failures(candidate, source)
-    failures.append("Gate 6B citation-rejection proof is not implemented")
-    return False, failures
+    if rules(candidate):
+        failures.append(
+            "citation-insufficient source produced a supported policy rule"
+        )
+    if not candidate.get("unresolved_gaps"):
+        failures.append(
+            "citation-insufficient source did not produce an evidence gap"
+        )
+    if candidate.get("evidence_status") != "GAPS_PRESENT":
+        failures.append(
+            "citation-insufficient source did not block evidence eligibility"
+        )
+    if candidate.get("lifecycle_state") == "ACTIVE":
+        failures.append("citation-insufficient source produced an active candidate")
+    return not failures, failures
 
 
 def evaluate_injection(candidate: dict, source: str) -> tuple[bool, list[str]]:
@@ -389,7 +402,7 @@ def main() -> int:
     development_passed = not development or all(
         item["passed"] for item in development
     )
-    frozen_passed = not frozen or sum(item["passed"] for item in frozen) >= 4
+    frozen_passed = not frozen or all(item["passed"] for item in frozen)
     return 0 if development_passed and frozen_passed else 1
 
 

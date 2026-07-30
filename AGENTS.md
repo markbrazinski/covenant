@@ -16,7 +16,7 @@ automated activation must use the literal **SYNTHETIC TEST APPROVAL** label.
 Active candidate rules may supply policy semantics, but live MCP remains the
 only affected-set and path source.
 
-Gate 3's API is an orchestration boundary over those verified semantics. It must
+The API is an orchestration boundary over those verified semantics. It must
 keep candidate analysis, activation, MCP impact, and native writeback as distinct
 states; project unavailable and partial outcomes truthfully; persist only ignored
 local run state; and never accept expected terminal lists or dispositions from a
@@ -24,21 +24,19 @@ client.
 
 Humans retain legal and governance authority. System recommendations and real human approvals are separate states. A fixture actor may exercise approval behavior only when every representation says **SYNTHETIC TEST APPROVAL**; never imply that a synthetic approval is real.
 
-## Current gate state
+## Verified scope
 
-- Gates through 6D are merged on `main`; the React experience, Bedrock-backed
-  matching/extraction, deterministic verification, DataHub-native registry, live
-  MCP impact analysis, and SDK write/readback path are implemented.
+- The React experience, Bedrock-backed matching/extraction, deterministic
+  verification, DataHub-native registry, live MCP impact analysis, and SDK
+  write/readback path are implemented.
 - The tested provider path is Amazon Bedrock Converse with the configured Claude
   Sonnet 4.5 inference profile. Model access, credential source, synthetic
   document-transmission permission, and request cost remain operator
   responsibilities.
-- Gate 7 is documentation and submission-evidence cleanup only. It does not
-  authorize production-code changes, dependency changes, new features, or
-  deletion of ambiguous files.
-- When the local ignored documentation is present, read
-  `docs/Covenant_Handoff_2026-07-23.md` and the current gate report before
-  beginning a newly authorized gate.
+- `fixtures/extraction-qualification/` and
+  `fixtures/matching-qualification/` are challenge corpora. Their credentialed
+  provider runners must not be described as passing unless every selected
+  required case passes.
 
 An explicit owner commission may authorize work otherwise excluded below, but
 only within that commission's named scope. A broad request to “continue” does
@@ -55,7 +53,7 @@ cp .env.example .env
 ./scripts/run_verified_loop.sh
 ```
 
-For the Gate 3 API without silently resetting an existing graph:
+For the API without silently resetting an existing graph:
 
 ```bash
 ./scripts/start_covenant.sh
@@ -76,7 +74,7 @@ invoke the Bedrock document-upload flow.
   frontend or model integration, or add a hosted service, Slack or Jira
   integration, broad contract parser, production integration, or
   machine-unlearning feature or claim.
-- Even when a frontend is authorized, bind it to the real Gate 3 API; do not
+- Even when a frontend is authorized, bind it to the real API; do not
   hardcode expected terminals, paths, dispositions, receipts, or success states.
 - Treat existing tracked and untracked changes as user work. Preserve unrelated
   files and never clean, reset, overwrite, or stage them merely to obtain a

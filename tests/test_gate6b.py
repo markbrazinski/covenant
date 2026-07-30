@@ -147,7 +147,10 @@ def test_gate6b_hallucinated_citation_is_rejected_with_rule_id():
 
 def test_gate6b_frozen_citation_challenge_is_caught_deterministically():
     challenge = (
-        ROOT / "fixtures" / "gate6a" / "atlas_license_v4_citation_challenge.md"
+        ROOT
+        / "fixtures"
+        / "extraction-qualification"
+        / "atlas_license_v4_citation_challenge.md"
     ).read_text()
     payload = model_payload()
     payload["rules"] = [
@@ -162,7 +165,10 @@ def test_gate6b_frozen_citation_challenge_is_caught_deterministically():
             "confidence": 0.9,
         }
     ]
-    challenge_ref = "fixtures/gate6a/atlas_license_v4_citation_challenge.md"
+    challenge_ref = (
+        "fixtures/extraction-qualification/"
+        "atlas_license_v4_citation_challenge.md"
+    )
     value = build_candidate(
         ModelExtraction(
             payload=payload,
