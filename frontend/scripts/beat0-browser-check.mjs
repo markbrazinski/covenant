@@ -28,6 +28,21 @@ try {
     reducedMotion: "no-preference",
   });
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    const NativeEventSource = window.EventSource;
+    window.EventSource = class CovenantObservedEventSource extends NativeEventSource {
+      constructor(url, options) {
+        super(url, options);
+        this.addEventListener("MATCH_VERIFIED", () => {
+          const timing = window.__covenantBeat0Timing;
+          if (timing && !timing.observed.matchVerified) {
+            timing.observed.matchVerified =
+              performance.now() - timing.startedAt;
+          }
+        });
+      }
+    };
+  });
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
@@ -61,6 +76,42 @@ try {
     .waitFor();
   await capture(page, "beat0-01-landing.png");
 
+  await page.evaluate(() => {
+    const startedAt = performance.now();
+    const observed = {};
+    const record = () => {
+      const text = document.body.innerText;
+      const normalized = text.toLowerCase();
+      if (!observed.matching && text.includes("Matching agreement")) {
+        observed.matching = performance.now() - startedAt;
+      }
+      if (
+        !observed.matched &&
+        normalized.includes("matched to governed agreement")
+      ) {
+        observed.matched = performance.now() - startedAt;
+      }
+      if (
+        !observed.extracting &&
+        text.includes("Extracting via Bedrock")
+      ) {
+        observed.extracting = performance.now() - startedAt;
+      }
+      if (
+        !observed.verified &&
+        text.includes("Candidate verified and ready for review")
+      ) {
+        observed.verified = performance.now() - startedAt;
+      }
+    };
+    window.__covenantBeat0Timing = { startedAt, observed };
+    new MutationObserver(record).observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    record();
+  });
   await page
     .locator('input[type="file"]')
     .setInputFiles(fixturePath);
@@ -103,6 +154,22 @@ try {
       exact: true,
     })
     .waitFor();
+  const timing = await page.evaluate(() => {
+    const values = window.__covenantBeat0Timing.observed;
+    return {
+      landing_to_matching_ms: Math.round(values.matching),
+      match_phase_ms: Math.round(values.matchVerified - values.matching),
+      match_to_extract_ms: Math.round(
+        values.extracting - values.matchVerified,
+      ),
+      matched_card_lag_ms: Math.round(
+        values.matched - values.matchVerified,
+      ),
+      extract_phase_ms: Math.round(values.verified - values.extracting),
+      total_to_verified_ms: Math.round(values.verified),
+    };
+  });
+  console.log(`BEAT0_TIMING ${JSON.stringify(timing)}`);
   await capture(page, "beat0-04-verified.png");
 
   const pulseAnimation = await page.evaluate(() => {
