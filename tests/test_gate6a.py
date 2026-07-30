@@ -7,6 +7,7 @@ import jsonschema
 
 from covenant.extraction.bedrock import (
     BedrockCandidateExtractor,
+    load_bedrock_output_schema,
     load_prompt,
     load_schema,
 )
@@ -92,6 +93,12 @@ def test_gate6a_schema_vocabulary_is_engine_derived():
     schema = load_schema()
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.validate(semantic_payload(), schema)
+    confidence = schema["properties"]["rules"]["items"]["properties"]["confidence"]
+    assert confidence == {"type": "number", "minimum": 0.0, "maximum": 1.0}
+    provider_confidence = load_bedrock_output_schema()["properties"]["rules"][
+        "items"
+    ]["properties"]["confidence"]
+    assert provider_confidence == {"type": "number"}
     assert sorted(
         schema["properties"]["rules"]["items"]["properties"]["usage_class"]["enum"]
     ) == sorted(SUPPORTED_USAGES)
@@ -246,3 +253,26 @@ def test_gate6a_candidate_identity_is_stable_but_each_call_is_real():
     assert first.candidate["candidate_delta_id"] == second.candidate[
         "candidate_delta_id"
     ]
+
+
+def test_gate6a_no_material_change_returns_receipt_without_candidate():
+    payload = semantic_payload()
+    payload["rules"] = []
+    payload["material_change"] = False
+    client = FakeConverse(payload)
+    result = extract_candidate(
+        PRIOR,
+        PRIOR,
+        prior_ref="prior",
+        candidate_ref="candidate",
+        extractor=BedrockCandidateExtractor(
+            model_id="test.anthropic-model",
+            client=client,
+        ),
+        now=lambda: NOW,
+    )
+    assert result.status == "NO_MATERIAL_CHANGE"
+    assert result.candidate is None
+    assert result.receipt["status"] == "NO_MATERIAL_CHANGE"
+    assert result.receipt["provider"] == "bedrock"
+    assert result.receipt["attempts"] == 1

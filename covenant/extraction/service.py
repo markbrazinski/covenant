@@ -52,6 +52,27 @@ def extract_candidate(
             },
         )
     completed_at = clock().astimezone(timezone.utc).isoformat()
+    if (
+        model.payload["material_change"] is False
+        and not model.payload["rules"]
+        and not model.payload["unresolved_gaps"]
+    ):
+        return ExtractionResult(
+            status="NO_MATERIAL_CHANGE",
+            candidate=None,
+            receipt={
+                "provider": "bedrock",
+                "model_id": model.model_id,
+                "prompt_version": model.prompt_version,
+                "schema_version": "covenant.candidate_delta.v1",
+                "extraction_started_at": started_at,
+                "extraction_completed_at": completed_at,
+                "input_token_count": model.input_token_count,
+                "output_token_count": model.output_token_count,
+                "status": "NO_MATERIAL_CHANGE",
+                "attempts": model.attempts,
+            },
+        )
     candidate = build_candidate(
         model,
         prior_text=prior_text,

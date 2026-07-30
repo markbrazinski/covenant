@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -58,7 +59,7 @@ class BedrockCandidateExtractor:
 
     def extract(self, prior_text: str, candidate_text: str) -> ModelExtraction:
         prompt, prompt_version = load_prompt()
-        schema = load_schema()
+        schema = load_bedrock_output_schema()
         request = {
             "modelId": self.model_id,
             "system": [
@@ -183,6 +184,15 @@ def load_schema() -> dict[str, Any]:
     )
     if actual != expected:
         raise RuntimeError("model schema usage vocabulary diverges from the engine")
+    return schema
+
+
+def load_bedrock_output_schema() -> dict[str, Any]:
+    """Project the canonical schema onto Bedrock's supported JSON Schema subset."""
+    schema = deepcopy(load_schema())
+    confidence = schema["properties"]["rules"]["items"]["properties"]["confidence"]
+    confidence.pop("minimum", None)
+    confidence.pop("maximum", None)
     return schema
 
 

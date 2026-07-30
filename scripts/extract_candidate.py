@@ -61,7 +61,11 @@ def main() -> int:
         ),
     )
     print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
-    return 0 if result.status == "EXTRACTED_UNVERIFIED" else 2
+    return (
+        0
+        if result.status in {"EXTRACTED_UNVERIFIED", "NO_MATERIAL_CHANGE"}
+        else 2
+    )
 
 
 if __name__ == "__main__":
