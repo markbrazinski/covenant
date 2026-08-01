@@ -25,7 +25,7 @@ Covenant turns a changed data-use agreement into an evidence-bound, graph-derive
 
 ## Demo
 
-- Demo video: **[add public YouTube or Vimeo URL]**
+- Demo video: [Watch Covenant on YouTube](https://youtu.be/sbRDpQe-3pY)
 - Devpost submission: **[add Devpost URL]**
 - Native DataHub writeback proof: [view the screenshot](examples/screenshots/datahub-writeback.png)
 
